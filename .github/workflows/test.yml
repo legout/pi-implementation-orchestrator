@@ -1,0 +1,9 @@
+name: test
+on: [push, pull_request]
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n setup.sh tests/setup_test.sh
+      - run: bash tests/setup_test.sh

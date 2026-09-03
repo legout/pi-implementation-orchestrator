@@ -1,0 +1,26 @@
+{
+  "skill_name": "orchestrate-implementation",
+  "evals": [
+    {
+      "id": 1,
+      "name": "plan-only-task-graph",
+      "prompt": "Plan-only: read the feature plan. Produce a compact manifest summary, task dependency order, lane assignment, and two bounded worker briefs. Do not edit source files, create worktrees, commit, or use any orchestration skill.",
+      "expected_output": "Keeps plan-only authority, identifies Task 2 as dependent on Task 1, and gives bounded briefs without pasting the whole plan.",
+      "files": ["fixtures/feature-plan.md"]
+    },
+    {
+      "id": 2,
+      "name": "conflict-preflight",
+      "prompt": "Preflight the conflicting input fixture without using an orchestration skill. Do not dispatch a worker. Report the exact conflict, why implementation must pause, and the owner decision required.",
+      "expected_output": "Stops before mutation and identifies the incompatible public signature requirements.",
+      "files": ["fixtures/conflicting-inputs.md"]
+    },
+    {
+      "id": 3,
+      "name": "multi-lane-review-policy",
+      "prompt": "Explain how you would execute two independent implementation tasks with Pi sessions, worktrees, commits, reviewers, TDD workers, and optional persistent architecture/domain/quality peers. Include supervised and autonomous integration differences. Do not modify files and do not use an orchestration skill.",
+      "expected_output": "Uses native subagents for lifecycle, intercom only for named read-only peers, one writer per worktree, TDD evidence from each worker, and separate publication gates.",
+      "files": []
+    }
+  ]
+}
