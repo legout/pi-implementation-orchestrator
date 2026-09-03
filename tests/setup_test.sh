@@ -225,8 +225,8 @@ test_replacement_preserves_bytes() {
     cat <<'BLOCK'
 ## Agent workflow
 
-- Implementation workers use TDD and report red/green evidence.
-- Independent review is orchestrator-owned.
+- Every task declares one test obligation: `new-test`, `existing-check`, or `no-new-test`; focused TDD is required only for `new-test` work.
+- Review is adaptive and orchestrator-owned: high-risk or dependency-defining changes are reviewed immediately; low-risk changes may be reviewed cumulatively at a wave boundary.
 - Plans and tickets reference exact feature sources; this file defines stable repository-wide scope.
 - Source precedence: current owner decision → accepted ADR → approved specification → implementation plan → ticket → existing implementation.
 - Stop before implementation when authoritative sources conflict.
@@ -243,6 +243,23 @@ BLOCK
     printf 'suffix without final newline'
   } >"$TMP/expected"
   cmp "$TMP/expected" "$TMP/project/AGENTS.md"
+}
+
+test_adaptive_review_and_test_policy() {
+  local skill="$ROOT/skills/orchestrate-implementation/SKILL.md"
+  for term in new-test existing-check no-new-test adaptive lastReviewedSha; do
+    assert_contains "$skill" "$term"
+  done
+  assert_contains "$skill" '## Test obligations'
+  assert_contains "$skill" '## Review policy'
+  assert_contains "$ROOT/README.md" 'Focused TDD is required only for `new-test` work'
+  assert_contains "$ROOT/README.md" 'low-risk changes may be batch-reviewed'
+  assert_contains "$ROOT/README.md" 'high-risk changes are reviewed immediately'
+  new_case
+  stub_commands
+  printf '1\n1\ny\n' | "$ROOT/setup.sh" --planning matt --project "$TMP/project" >/dev/null
+  assert_contains "$TMP/project/AGENTS.md" 'Every task declares one test obligation: `new-test`, `existing-check`, or `no-new-test`; focused TDD is required only for `new-test` work.'
+  assert_contains "$TMP/project/AGENTS.md" 'Review is adaptive and orchestrator-owned: high-risk or dependency-defining changes are reviewed immediately; low-risk changes may be reviewed cumulatively at a wave boundary.'
 }
 
 test_missing_project_dir_fails() {

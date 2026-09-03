@@ -18,8 +18,8 @@
     {
       "id": 3,
       "name": "multi-lane-review-policy",
-      "prompt": "Explain how you would execute two independent implementation tasks with Pi sessions, worktrees, commits, reviewers, TDD workers, and optional persistent architecture/domain/quality peers. Include supervised and autonomous integration differences. Do not modify files and do not use an orchestration skill.",
-      "expected_output": "Uses native subagents for lifecycle, intercom only for named read-only peers, one writer per worktree, TDD evidence from each worker, and separate publication gates.",
+      "prompt": "Explain how you would execute two independent implementation tasks with Pi sessions, worktrees, commits, reviewers, per-task test obligations, and optional persistent architecture/domain/quality peers. Include supervised and autonomous integration differences. Do not modify files and do not use an orchestration skill.",
+      "expected_output": "Uses native subagents for lifecycle, intercom only for named read-only peers, one writer per worktree, focused TDD only for new-test tasks with existing-check/no-new-test alternatives, adaptive review with immediate review for high-risk work and cumulative lastReviewedSha..HEAD batch review for low-risk work, and separate publication gates.",
       "files": []
     }
   ]

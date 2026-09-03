@@ -1,6 +1,6 @@
 # pi-implementation-orchestrator
 
-Plan features with Superpowers or Matt Pocock skills, then execute the plans with isolated Pi TDD workers, independent reviewers, and orchestrator-owned integration.
+Plan features with Superpowers or Matt Pocock skills, then execute the plans with isolated Pi workers, per-task test obligations, adaptive independent review, and orchestrator-owned integration.
 
 ## Architecture
 
@@ -8,8 +8,8 @@ Plan features with Superpowers or Matt Pocock skills, then execute the plans wit
 planning skills
   → ADRs, specifications, tickets, and plans
   → orchestrate-implementation
-  → fresh TDD workers in managed worktrees
-  → focused validation and independent review
+  → fresh workers in managed worktrees
+  → focused validation and adaptive review
   → orchestrator-owned integration
   → separate publication authority
 ```
@@ -56,7 +56,7 @@ Packages for every profile: `pi install npm:pi-subagents`, `pi install npm:pi-in
 
 Never installed:
 
-- Matt's `implement` and `code-review` — workers use TDD; the orchestrator supplies independent reviewers.
+- Matt's `implement` and `code-review` — workers use TDD for `new-test` work; the orchestrator supplies independent reviewers.
 - Superpowers execution, review, worktree, and branch-finishing skills (`subagent-driven-development`, `executing-plans`, `requesting-code-review`, …) — the orchestrator owns those responsibilities.
 
 Whole upstream packs are never installed; only the exact skills above.
@@ -90,8 +90,19 @@ Work stops before implementation when authoritative sources conflict. Documentat
 
 ## Worker and reviewer contracts
 
-- **TDD workers:** sole writer in one managed worktree; one bounded brief per worker; failing test → minimal implementation → passing test → refactor; report commit IDs, changed files, red/green evidence, validation results, and residual risks. No scope expansion, no cross-lane integration, no publication.
-- **Independent reviewer:** fresh read-only context, reviews the exact task diff, classifies findings; the orchestrator (not workers or reviewers) owns acceptance and integration.
+Evidence is always mandatory; a new test is not. Every task declares exactly one test obligation during preflight:
+
+- **`new-test`** — new behavior, bug regression, branching/state, parsing/validation, security, permissions, money, destructive data handling, concurrency, public contracts, or behavior without existing coverage (e.g. a new endpoint, a fixed off-by-one bug). Focused TDD is required only for `new-test` work: failing test → minimal implementation → passing test → refactor.
+- **`existing-check`** — existing tests already exercise the affected behavior (e.g. a refactor inside covered seams). Add no redundant test; run and report the named focused checks.
+- **`no-new-test`** — documentation, formatting, comments, static metadata, generated artifacts, typo correction, or another change where a new test proves little (e.g. a README edit). Run the smallest meaningful lint, parse, build, diff, or manual validation.
+
+A worker may challenge its assigned obligation after inspection but must report why; it may never silently skip validation.
+
+- **Workers:** sole writer in one managed worktree; one bounded brief per worker; report commit IDs, changed files, obligation, rationale, commands, results, and residual risks. No scope expansion, no cross-lane integration, no publication.
+- **Review policy:** adaptive and orchestrator-owned — high-risk changes are reviewed immediately; low-risk changes may be batch-reviewed cumulatively (`lastReviewedSha..HEAD`) at a wave boundary. Alternatives: `strict` (immediate task review plus final review), `wave` (review completed waves plus final review), and `final-only` (explicit opt-in for prototypes or mechanical work).
+- **Immediate-review triggers:** public API/schema/shared contract; security/auth/permissions/secrets; money/data-loss/migration; concurrency/distributed behavior; broad cross-cutting diff; weak or missing checks; worker uncertainty/scope expansion; integration conflict; a task whose contract will be consumed before the next wave review.
+- **Cumulative review:** one reviewer covers the exact range `lastReviewedSha..HEAD`; after a clean verdict the boundary advances. One batch fix worker handles the accepted finding list, then the affected range is revalidated and re-reviewed. Every pending change is reviewed before integration or publication.
+- **Independent reviewer:** fresh read-only context, reviews the exact diff range, classifies findings; the orchestrator (not workers or reviewers) owns acceptance and integration.
 
 ## Herdr visibility
 

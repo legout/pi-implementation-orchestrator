@@ -186,8 +186,8 @@ render_workflow_block() {
   cat <<'EOF'
 ## Agent workflow
 
-- Implementation workers use TDD and report red/green evidence.
-- Independent review is orchestrator-owned.
+- Every task declares one test obligation: `new-test`, `existing-check`, or `no-new-test`; focused TDD is required only for `new-test` work.
+- Review is adaptive and orchestrator-owned: high-risk or dependency-defining changes are reviewed immediately; low-risk changes may be reviewed cumulatively at a wave boundary.
 - Plans and tickets reference exact feature sources; this file defines stable repository-wide scope.
 - Source precedence: current owner decision → accepted ADR → approved specification → implementation plan → ticket → existing implementation.
 - Stop before implementation when authoritative sources conflict.

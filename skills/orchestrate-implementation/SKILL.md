@@ -39,6 +39,16 @@ Require a git repository for mutation modes. Verify repository, cwd, base ref, c
 
 Normalize different plan formats with a read-only scout. Preserve the planner's source documents; do not require every planning skill to emit one new format.
 
+## Test obligations
+
+Every task receives exactly one obligation during preflight:
+
+- `new-test`: meaningful behavior, bug regression, branching/state, parsing/validation, security, permissions, money, destructive data handling, concurrency, public contracts, or behavior without existing coverage. Load `skill: "tdd"`; require failing test → minimal implementation → passing test → refactor.
+- `existing-check`: existing tests already exercise the affected behavior. Add no redundant test; run and report the named focused checks.
+- `no-new-test`: documentation, formatting, comments, static metadata, generated artifacts, typo correction, or another change where a new test proves little. Run the smallest meaningful lint, parse, build, diff, or manual validation.
+
+State the assigned obligation, rationale, commands, and results in each brief and report. A worker may challenge the assignment after inspection but must report why; it may not silently skip validation. Evidence is always mandatory; a new test is not.
+
 ## Run manifest
 
 Create one compact run manifest in runtime-managed artifacts. Record:
@@ -65,7 +75,7 @@ Give each worker one bounded brief containing:
 4. relevant upstream interfaces and approved decisions;
 5. acceptance criteria;
 6. focused validation commands;
-7. TDD requirement: failing test, minimal implementation, passing test, then refactor;
+7. test obligation: the assigned obligation and its rationale;
 8. commit and report requirements; and
 9. stop/escalate conditions.
 
@@ -75,7 +85,7 @@ The worker report contains:
 
 - status and commit IDs;
 - changed files;
-- TDD evidence: the test that failed before implementation and passed afterward;
+- test-obligation evidence: the assigned obligation, rationale, commands, and results; failing test before and passing test after implementation for `new-test`;
 - validation commands and results;
 - open decisions and residual risks; and
 - artifact and handoff references.
@@ -88,7 +98,7 @@ Workers do not expand scope, integrate other lanes, publish, or delegate further
 |---|---|---|
 | Orchestrator | Parent | Routing, decisions, acceptance, integration |
 | Scout/normalizer | Fresh | Read-only repository and input inspection |
-| Worker | Fresh | Sole writer in one managed worktree; uses TDD |
+| Worker | Fresh | Sole writer in one managed worktree; evidence per assigned test obligation |
 | Reviewer | Fresh | Read-only review against the exact task diff |
 | Simplifier | Fresh | Optional read-only complexity challenge |
 | Oracle | Forked, exceptional | Advisory hard-decision escalation |
@@ -140,27 +150,45 @@ For a coordinated wave, make exactly one top-level `subagent` call with `async: 
 - Use stable keys and distinct managed output paths.
 - Set fresh context for scouts, workers, reviewers, and validators.
 - Set `worktree: true` on parallel mutation-capable children.
-- Give every worker `skill: "tdd"` unless its selected profile already guarantees TDD; require red-green-refactor evidence in its report.
+- Give `skill: "tdd"` only to `new-test` tasks, or when the worker profile is intentionally TDD-only; require evidence matching the assigned test obligation in each report.
 - Do not set hard tool budgets on mutation-capable workers.
 - Return output references, commit IDs, and handoffs instead of copying full reports into later prompts.
 
 A worker launch names the brief path, repo/cwd/ref, authority, claimed seam, validation, commit requirement, output, and escalation rules. A reviewer launch names the same brief, worker report, and exact diff package.
 
+## Review policy
+
+Choose one review policy per run:
+
+- `adaptive` (default): immediate review for high-risk/dependency-defining work; queue low-risk work for wave review.
+- `strict`: immediate task review plus final review.
+- `wave`: review only completed waves plus final review.
+- `final-only`: explicit opt-in for prototypes, mechanical work, or another owner-approved low-risk slice.
+
+Immediate-review triggers:
+
+```text
+public API/schema/shared contract; security/auth/permissions/secrets; money/data-loss/migration; concurrency/distributed behavior; broad cross-cutting diff; weak or missing checks; worker uncertainty/scope expansion; integration conflict; a task whose contract will be consumed before the next wave review
+```
+
+For pending low-risk changes, store `lastReviewedSha` and review the exact cumulative range `lastReviewedSha..HEAD` at the end of a wave, before fan-in, when the diff becomes incoherent, or before integration/publication. After a clean verdict, advance `lastReviewedSha`. Send the complete accepted finding list from a cumulative review to one fix worker, then revalidate and re-review the affected range. Every pending change must be reviewed before main-branch integration or publication.
+
 ## Execution loop
 
 1. Read source artifacts.
-2. Preflight constraints, dependencies, conflicts, and repository state.
+2. Preflight constraints, dependencies, conflicts, and repository state; classify each task's risk and assign its test obligation.
 3. Consult configured persistent peers when useful.
-4. Create the manifest, briefs, lane board, and gates.
+4. Create the manifest, briefs, lane board, and gates; record the review policy and initial `lastReviewedSha`.
 5. Run fresh scouts for load-bearing context.
-6. Dispatch workers in safe serial or parallel waves.
-7. Run focused validation in each worker worktree.
-8. Obtain a fresh task review against the exact diff.
-9. Return valid blockers to the same writer for fix/re-review when its managed worktree still exists and the child is resumable; otherwise launch a fresh fix worker in a new managed worktree from the exact original base, apply the durable prior handoff patch, then apply accepted findings.
-10. Cherry-pick accepted commits according to mode.
-11. Run a fresh whole-branch review.
-12. Run final typecheck, lint, tests, and project acceptance commands.
-13. Keep push, PR merge, deploy, and release behind separate authority gates.
+6. Dispatch workers in safe serial or parallel waves with their per-task test obligations.
+7. Run focused validation in each worker worktree matching the assigned obligation.
+8. Route each completed task to immediate review or the pending-review queue behind `lastReviewedSha` per the review policy.
+9. At each boundary — end of a wave, before fan-in, when the pending diff becomes incoherent, or before integration/publication — run one cumulative review of the exact range `lastReviewedSha..HEAD`; on a clean verdict advance `lastReviewedSha`. Send the complete accepted finding list to one fix worker, then revalidate and re-review the affected range.
+10. Return valid blockers to the same writer for fix/re-review when its managed worktree still exists and the child is resumable; otherwise launch a fresh fix worker in a new managed worktree from the exact original base, apply the durable prior handoff patch, then apply accepted findings.
+11. Cherry-pick accepted commits according to mode.
+12. Run a final fresh exact-range/whole-branch review before integration or publication.
+13. Run final typecheck, lint, tests, and project acceptance commands.
+14. Keep push, PR merge, deploy, and release behind separate authority gates.
 
 Cap review loops. Stop when no blocking fix remains, an owner decision is required, or the configured cap is reached. Do not loop for optional polish.
 
@@ -186,8 +214,8 @@ Escalate product, architecture, credential, merge, release, and publication choi
 Before accepting a run, verify:
 
 - final diff contains only intended files;
-- focused validation covers changed behavior;
-- substantial changes have fresh review evidence;
+- focused validation covers changed behavior per its assigned obligation;
+- every pending change is reviewed before integration or publication: exact `lastReviewedSha..HEAD` ranges are clean and the boundary advanced;
 - accepted findings were fixed and revalidated;
 - every lane is terminal or blocked with a named next action;
 - handoffs are durable before worktree cleanup; and
@@ -202,6 +230,8 @@ Reviewer reports, CI checks, and receipts are evidence, not publication authorit
 | Non-git directory | `plan-only`; no mutation workers |
 | Conflicting sources | Stop before dispatch; request owner decision |
 | Independent writers | Managed worktree per writer |
+| High-risk or dependency-defining task | Immediate review |
+| Low-risk completed task | Queue for cumulative `lastReviewedSha..HEAD` review at the next boundary |
 | Dependent tasks | Serial handoff with explicit interface |
 | Spawned child question | Native supervisor channel |
 | Persistent specialist | Named read-only intercom peer |

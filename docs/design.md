@@ -2,7 +2,7 @@
 
 ## Goal
 
-Publish a reusable Pi implementation-orchestration skill with a safe installer that supports selected Superpowers and Matt Pocock planning workflows, TDD workers, native Pi subagents, optional persistent intercom peers, and interactive project initialization.
+Publish a reusable Pi implementation-orchestration skill with a safe installer that supports selected Superpowers and Matt Pocock planning workflows, workers with per-task test obligations, native Pi subagents, optional persistent intercom peers, and interactive project initialization.
 
 ## Repository
 
@@ -20,8 +20,8 @@ The repository owns the orchestration skill, installer, project-init prompt, tes
 planning skills
   → ADRs, specifications, tickets, and plans
   → orchestrate-implementation
-  → fresh TDD workers in managed worktrees
-  → focused validation and independent review
+  → fresh workers in managed worktrees
+  → focused validation and adaptive review
   → orchestrator-owned integration
   → separate publication authority
 ```
@@ -82,11 +82,11 @@ Install only:
 - `to-tickets`
 - `tdd`
 
-Do not install Matt's `implement` or `code-review` skills. Workers use TDD; the orchestrator supplies independent reviewers.
+Do not install Matt's `implement` or `code-review` skills. Workers use TDD for `new-test` tasks; the orchestrator supplies independent reviewers.
 
 ### Both profile
 
-Install the union of the two selected profiles without duplicates. TDD remains required.
+Install the union of the two selected profiles without duplicates. TDD remains required for `new-test` tasks.
 
 ## Upstream Installation
 
@@ -128,8 +128,8 @@ If one of `CLAUDE.md` or `AGENTS.md` already exists, update that file. If both e
 
 Write or update one marked workflow block that documents:
 
-- TDD workers;
-- orchestrator-owned independent review;
+- per-task test obligations (`new-test`, `existing-check`, `no-new-test`);
+- adaptive orchestrator-owned review;
 - documentation directory scopes;
 - source precedence; and
 - stop-on-conflict behavior.
@@ -146,6 +146,25 @@ Re-running setup updates the one managed block and generated files idempotently.
 ## Init Prompt
 
 Install or include `prompts/init-orchestrator-project.md` for later model-guided reconfiguration. The deterministic setup handles initial configuration; the prompt supports changes that require repository inspection and human decisions.
+
+## Test obligations and review policy
+
+Validation evidence is mandatory for every task; a new test is not. During preflight each task receives exactly one obligation:
+
+- `new-test`: meaningful behavior, bug regression, branching/state, parsing/validation, security, permissions, money, destructive data handling, concurrency, public contracts, or behavior without existing coverage. Load `skill: "tdd"` and require red-green-refactor evidence.
+- `existing-check`: existing tests already exercise the affected behavior. Run and report the named focused checks without adding redundant tests.
+- `no-new-test`: documentation, formatting, comments, static metadata, generated artifacts, typo correction, or similar low-yield changes. Run the smallest meaningful validation.
+
+The review policy is chosen per run and defaults to `adaptive`:
+
+- `adaptive` (default): immediate review for high-risk or dependency-defining work; low-risk work queues behind a `lastReviewedSha` boundary.
+- `strict`: immediate task review plus final review.
+- `wave`: review only completed waves plus final review.
+- `final-only`: explicit opt-in for prototypes, mechanical work, or owner-approved low-risk slices.
+
+Immediate-review triggers: public API/schema/shared contract; security/auth/permissions/secrets; money/data-loss/migration; concurrency/distributed behavior; broad cross-cutting diff; weak or missing checks; worker uncertainty/scope expansion; integration conflict; a task whose contract will be consumed before the next wave review.
+
+Pending low-risk changes receive one cumulative review of the exact range `lastReviewedSha..HEAD` at the end of a wave, before fan-in, when the diff becomes incoherent, or before integration/publication; the boundary advances only after a clean verdict. One batch fix worker handles the complete accepted finding list, then the affected range is revalidated and re-reviewed. A final exact-range/whole-branch review precedes main-branch integration or publication.
 
 ## Safety
 
@@ -188,7 +207,7 @@ The root README is short but comprehensive. It includes:
 - ticket/plan input behavior;
 - project documentation scope and precedence;
 - execution modes;
-- TDD and independent-review boundaries;
+- test obligations and adaptive review boundaries;
 - Herdr visibility options;
 - dry-run, updates, uninstall, and troubleshooting;
 - limitations; and
