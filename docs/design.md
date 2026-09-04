@@ -66,7 +66,7 @@ Direct setup remains available from a checkout:
 ./setup.sh --project /path/to/repo --dry-run
 ```
 
-Project choices can be made non-interactively with `--instruction-file auto|AGENTS.md|CLAUDE.md`, `--tracker auto|github|local|other`, `--tracker-description TEXT` (required for `other`), and `--domain-layout auto|single|multi`. The script installs the selected skills from `legout/skills` globally for Pi and ensures `npm:pi-subagents` and `npm:pi-intercom` are installed through Pi.
+Project choices can be made non-interactively with `--instruction-file auto|AGENTS.md|CLAUDE.md`, `--tracker auto|github|local|other`, `--tracker-description TEXT` (required for `other`), `--domain-layout auto|single|multi`, and `--skill-scope auto|global|project`. Global scope (the default) installs skills user-level and Pi packages globally; project scope installs skills into the project's agent directories and registers the Pi packages in the project's `.pi/settings.json` via `pi install --local`. Project scope requires `--project`. The script installs the selected skills from `legout/skills` for Pi and ensures `npm:pi-subagents` and `npm:pi-intercom` are installed through Pi.
 
 ## Selected Skills
 

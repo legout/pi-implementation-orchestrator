@@ -70,6 +70,8 @@ For a pinned tag or commit, append `@<ref>` to the Git source. A direct alternat
 
 Packages: `pi install npm:pi-subagents`, `pi install npm:pi-intercom`.
 
+Skills and packages install **globally** (user-level) by default. Choose **project** scope to install skills into the project's agent directories and register the Pi packages in the project's `.pi/settings.json` instead: `./setup.sh --project /path --skill-scope project` (non-interactive) or answer the scope question when prompted. Project scope requires `--project`; it cannot be combined with `--skip-project`.
+
 ### Not installed by default
 
 Additional `legout/skills` entries you can add manually: `capture-project-vision`, `doc-coauthoring`, `simplify-code`, `review-codebase-architecture`. The original upstream packs (`mattpocock/skills`, `obra/superpowers`) are never installed — their workflows live on in the consolidated skills above. Whole-pack installation is never used.

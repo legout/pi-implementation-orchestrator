@@ -96,6 +96,14 @@ test_rejects_bad_args() {
     echo "blank tracker description accepted"
     exit 1
   fi
+  if "$ROOT/setup.sh" --skip-project --skill-scope bogus >/dev/null 2>&1; then
+    echo "invalid skill-scope accepted"
+    exit 1
+  fi
+  if "$ROOT/setup.sh" --skip-project --skill-scope project >/dev/null 2>&1; then
+    echo "project scope with skip-project accepted"
+    exit 1
+  fi
   if "$ROOT/setup.sh" --skip-project --domain-layout monorepo >/dev/null 2>&1; then
     echo "invalid domain-layout accepted"
     exit 1
@@ -117,7 +125,7 @@ test_dry_run_writes_nothing() {
   mkdir "$TMP/ro-tmp"
   chmod 500 "$TMP/ro-tmp"
   before=$(find "$TMP" -type f | sort | xargs shasum)
-  if ! printf '1\n1\ny\n' | TMPDIR="$TMP/ro-tmp" "$ROOT/setup.sh" --project "$TMP/project" --dry-run >/dev/null 2>&1; then
+  if ! printf '1\n1\n1\ny\n' | TMPDIR="$TMP/ro-tmp" "$ROOT/setup.sh" --project "$TMP/project" --dry-run >/dev/null 2>&1; then
     echo "dry-run attempted a filesystem write (read-only TMPDIR made it fail)"
     exit 1
   fi
@@ -131,7 +139,7 @@ test_initializes_agents_docs() {
   new_case
   stub_commands
   git -C "$TMP/project" init -q
-  printf '1\n2\ny\n' | "$ROOT/setup.sh" --project "$TMP/project"
+  printf '1\n1\n2\ny\n' | "$ROOT/setup.sh" --project "$TMP/project"
   test -f "$TMP/project/AGENTS.md"
   test -f "$TMP/project/docs/agents/issue-tracker.md"
   test -f "$TMP/project/docs/agents/domain.md"
@@ -143,7 +151,7 @@ test_initializes_agents_docs() {
 test_declined_confirmation_writes_nothing() {
   new_case
   stub_commands
-  printf '1\n1\nn\n' | "$ROOT/setup.sh" --project "$TMP/project"
+  printf '1\n1\n1\nn\n' | "$ROOT/setup.sh" --project "$TMP/project"
   test ! -e "$TMP/project/AGENTS.md"
   test ! -e "$TMP/project/docs/agents/issue-tracker.md"
 }
@@ -151,7 +159,7 @@ test_declined_confirmation_writes_nothing() {
 test_rerun_is_idempotent() {
   new_case
   stub_commands
-  printf '1\n1\ny\n' | "$ROOT/setup.sh" --project "$TMP/project" --yes
+  printf '1\n1\n1\ny\n' | "$ROOT/setup.sh" --project "$TMP/project" --yes
   printf 'y\n' | "$ROOT/setup.sh" --project "$TMP/project" --yes
   assert_eq "$(grep -c 'pi-implementation-orchestrator:start' "$TMP/project/AGENTS.md" | tr -d ' ')" "1"
 }
@@ -253,7 +261,7 @@ test_adaptive_review_and_test_policy() {
   assert_contains "$ROOT/README.md" 'high-risk changes are reviewed immediately'
   new_case
   stub_commands
-  printf '1\n1\ny\n' | "$ROOT/setup.sh" --project "$TMP/project" >/dev/null
+  printf '1\n1\n1\ny\n' | "$ROOT/setup.sh" --project "$TMP/project" >/dev/null
   assert_contains "$TMP/project/AGENTS.md" 'Every task declares one test obligation: `new-test`, `existing-check`, or `no-new-test`; focused TDD is required only for `new-test` work.'
   assert_contains "$TMP/project/AGENTS.md" 'Review is adaptive and orchestrator-owned: high-risk or dependency-defining changes are reviewed immediately; low-risk changes may be reviewed cumulatively at a wave boundary.'
 }
@@ -280,6 +288,18 @@ test_pi_package_manifest() {
     if (!p.pi || Object.prototype.hasOwnProperty.call(p.pi, "skills")) fail("package must not bundle skills");
     if (!Array.isArray(p.pi.prompts) || !p.pi.prompts.includes("./prompts")) fail("p.pi.prompts missing ./prompts");
   ' "$ROOT/package.json"
+}
+
+test_skill_scope_project() {
+  new_case
+  stub_commands
+  "$ROOT/setup.sh" --project "$TMP/project" --skill-scope project --yes \
+    --instruction-file AGENTS.md --tracker local --domain-layout single \
+    </dev/null >/dev/null 2>&1
+  assert_contains "$TEST_CALLS" "npx skills add legout/skills"
+  assert_not_contains "$TEST_CALLS" "--global"
+  assert_contains "$TEST_CALLS" "pi install --local npm:pi-subagents"
+  assert_contains "$TEST_CALLS" "pi install --local npm:pi-intercom"
 }
 
 test_single_setup_entrypoint() {

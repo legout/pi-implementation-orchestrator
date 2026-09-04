@@ -13,11 +13,12 @@ INSTRUCTION_FILE_CHOICE=auto
 TRACKER_CHOICE=auto
 TRACKER_DESCRIPTION=
 DOMAIN_LAYOUT_CHOICE=auto
+SKILL_SCOPE_CHOICE=auto
 
 usage() {
   echo "Usage: ./setup.sh [--project PATH|--skip-project]" >&2
   echo "            [--instruction-file auto|AGENTS.md|CLAUDE.md] [--tracker auto|github|local|other]" >&2
-  echo "            [--tracker-description TEXT] [--domain-layout auto|single|multi] [--dry-run] [--yes]" >&2
+  echo "            [--tracker-description TEXT] [--domain-layout auto|single|multi] [--skill-scope auto|global|project] [--dry-run] [--yes]" >&2
 }
 
 die() {
@@ -71,6 +72,10 @@ parse_args() {
       DOMAIN_LAYOUT_CHOICE=${2-}
       shift 2
       ;;
+    --skill-scope)
+      SKILL_SCOPE_CHOICE=${2-}
+      shift 2
+      ;;
     -h | --help)
       usage
       exit 0
@@ -100,8 +105,16 @@ parse_args() {
   *) die "invalid --domain-layout value: ${DOMAIN_LAYOUT_CHOICE:-<missing>}" ;;
   esac
 
+  case "$SKILL_SCOPE_CHOICE" in
+  auto | global | project) ;;
+  *) die "invalid --skill-scope value: ${SKILL_SCOPE_CHOICE:-<missing>}" ;;
+  esac
+
   if [ -n "$PROJECT" ] && "$SKIP_PROJECT"; then
     die "choose either --project or --skip-project, not both"
+  fi
+  if [ "$SKILL_SCOPE_CHOICE" = project ] && "$SKIP_PROJECT"; then
+    die "--skill-scope project requires --project PATH"
   fi
   if [ -z "$PROJECT" ] && ! "$SKIP_PROJECT"; then
     die "choose either --project PATH or --skip-project"
@@ -217,15 +230,49 @@ choose_domain_layout() {
   fi
 }
 
+choose_skill_scope() {
+  case "$SKILL_SCOPE_CHOICE" in
+  global)
+    echo "Global"
+    return
+    ;;
+  project)
+    echo "Project"
+    return
+    ;;
+  esac
+  if [ -n "$PROJECT" ]; then
+    ask_choice "Skill installation scope" "Global" "Project"
+  else
+    echo "Global"
+  fi
+}
+
+run_in_project() {
+  if "$DRY_RUN"; then
+    printf '+ (cd %q &&' "$PROJECT"
+    printf ' %q' "$@"
+    printf ')\n'
+  else
+    (cd "$PROJECT" && "$@")
+  fi
+}
+
 install_skills() {
   local args=(npx skills add legout/skills)
   local s
   for s in "${LEGOUT_SKILLS[@]}"; do args+=(--skill "$s"); done
-  args+=(--global --agent pi --yes --copy)
-  run "${args[@]}"
-
-  run pi install npm:pi-subagents
-  run pi install npm:pi-intercom
+  if [ "$SKILL_SCOPE" = Project ]; then
+    args+=(--agent pi --yes --copy)
+    run_in_project "${args[@]}"
+    run_in_project pi install --local npm:pi-subagents
+    run_in_project pi install --local npm:pi-intercom
+  else
+    args+=(--global --agent pi --yes --copy)
+    run "${args[@]}"
+    run pi install npm:pi-subagents
+    run pi install npm:pi-intercom
+  fi
 }
 
 render_workflow_block() {
@@ -382,6 +429,7 @@ init_project() {
 main() {
   parse_args "$@"
   resolve_project
+  SKILL_SCOPE=$(choose_skill_scope)
   install_skills
   if [ -n "$PROJECT" ]; then
     init_project
