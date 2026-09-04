@@ -43,79 +43,60 @@ assert_eq() { test "$1" = "$2" || {
   exit 1
 }; }
 
-test_matt_profile() {
+test_legout_stack() {
   new_case
   stub_commands
-  "$ROOT/setup.sh" --planning matt --skip-project --yes
-  assert_contains "$TEST_CALLS" "mattpocock/skills"
-  for skill in setup-matt-pocock-skills grilling domain-modeling grill-with-docs to-spec to-tickets tdd resolving-merge-conflicts; do
+  "$ROOT/setup.sh" --skip-project --yes
+  assert_contains "$TEST_CALLS" "npx skills add legout/skills"
+  for skill in shape-design write-implementation-plan prototype-question verification-before-completion systematic-debugging orchestrate-implementation merge-worktree make-release; do
     assert_contains "$TEST_CALLS" "--skill $skill"
   done
-  assert_not_contains "$TEST_CALLS" "--skill implement"
-  assert_not_contains "$TEST_CALLS" "--skill code-review"
+  assert_not_contains "$TEST_CALLS" "mattpocock/skills"
   assert_not_contains "$TEST_CALLS" "obra/superpowers"
+  assert_eq "$(grep -c 'skills add' "$TEST_CALLS")" "1"
 }
 
-test_superpowers_profile() {
+test_rejects_planning_flag() {
   new_case
   stub_commands
-  "$ROOT/setup.sh" --planning superpowers --skip-project --yes
-  assert_contains "$TEST_CALLS" "obra/superpowers"
-  assert_contains "$TEST_CALLS" "--skill brainstorming"
-  assert_contains "$TEST_CALLS" "--skill writing-plans"
-  assert_contains "$TEST_CALLS" "mattpocock/skills"
-  assert_contains "$TEST_CALLS" "--skill tdd"
-  assert_contains "$TEST_CALLS" "--skill resolving-merge-conflicts"
-  assert_not_contains "$TEST_CALLS" "subagent-driven-development"
-  assert_not_contains "$TEST_CALLS" "executing-plans"
-  assert_not_contains "$TEST_CALLS" "requesting-code-review"
-}
-
-test_both_profile() {
-  new_case
-  stub_commands
-  "$ROOT/setup.sh" --planning both --skip-project --yes
-  assert_contains "$TEST_CALLS" "obra/superpowers"
-  assert_contains "$TEST_CALLS" "mattpocock/skills"
-  assert_eq "$(grep -o -- '--skill tdd' "$TEST_CALLS" | wc -l | tr -d ' ')" "1"
+  if "$ROOT/setup.sh" --planning matt --skip-project --yes >/dev/null 2>&1; then
+    echo "removed --planning flag accepted"
+    exit 1
+  fi
 }
 
 test_rejects_bad_args() {
   new_case
   stub_commands
-  if "$ROOT/setup.sh" --planning nope --skip-project >/dev/null 2>&1; then
-    echo "invalid planning accepted"
-    exit 1
-  fi
   if "$ROOT/setup.sh" --bogus --skip-project >/dev/null 2>&1; then
     echo "unknown flag accepted"
     exit 1
   fi
-  if "$ROOT/setup.sh" --planning matt >/dev/null 2>&1; then
+  if "$ROOT/setup.sh" >/dev/null 2>&1; then
     echo "missing project target accepted"
     exit 1
   fi
-  if "$ROOT/setup.sh" --planning matt --project "$TMP/project" --skip-project >/dev/null 2>&1; then
+  if "$ROOT/setup.sh" --project "$TMP/project" --skip-project >/dev/null 2>&1; then
     echo "both targets accepted"
     exit 1
   fi
-  if "$ROOT/setup.sh" --planning matt --skip-project --instruction-file nope.md >/dev/null 2>&1; then
+  if "$ROOT/setup.sh" --skip-project --instruction-file nope.md >/dev/null 2>&1; then
     echo "invalid instruction-file accepted"
     exit 1
   fi
-  if "$ROOT/setup.sh" --planning matt --skip-project --tracker bogus >/dev/null 2>&1; then
+  if "$ROOT/setup.sh" --skip-project --tracker bogus >/dev/null 2>&1; then
     echo "invalid tracker accepted"
     exit 1
   fi
-  if "$ROOT/setup.sh" --planning matt --skip-project --tracker other >/dev/null 2>&1; then
+  if "$ROOT/setup.sh" --skip-project --tracker other >/dev/null 2>&1; then
     echo "tracker other without description accepted"
     exit 1
   fi
-  if "$ROOT/setup.sh" --planning matt --skip-project --tracker other --tracker-description "  " >/dev/null 2>&1; then
+  if "$ROOT/setup.sh" --skip-project --tracker other --tracker-description "  " >/dev/null 2>&1; then
     echo "blank tracker description accepted"
     exit 1
   fi
-  if "$ROOT/setup.sh" --planning matt --skip-project --domain-layout monorepo >/dev/null 2>&1; then
+  if "$ROOT/setup.sh" --skip-project --domain-layout monorepo >/dev/null 2>&1; then
     echo "invalid domain-layout accepted"
     exit 1
   fi
@@ -124,10 +105,9 @@ test_rejects_bad_args() {
 test_installs_pi_packages_and_external_skills() {
   new_case
   stub_commands
-  "$ROOT/setup.sh" --planning matt --skip-project --yes
+  "$ROOT/setup.sh" --skip-project --yes
   assert_contains "$TEST_CALLS" "pi install npm:pi-subagents"
   assert_contains "$TEST_CALLS" "pi install npm:pi-intercom"
-  assert_contains "$TEST_CALLS" "npx skills add legout/skills --skill orchestrate-implementation --skill merge-worktree --skill make-release --global --agent pi --yes --copy"
   assert_not_contains "$TEST_CALLS" "skills add $ROOT"
 }
 
@@ -137,7 +117,7 @@ test_dry_run_writes_nothing() {
   mkdir "$TMP/ro-tmp"
   chmod 500 "$TMP/ro-tmp"
   before=$(find "$TMP" -type f | sort | xargs shasum)
-  if ! printf '1\n1\ny\n' | TMPDIR="$TMP/ro-tmp" "$ROOT/setup.sh" --planning matt --project "$TMP/project" --dry-run >/dev/null 2>&1; then
+  if ! printf '1\n1\ny\n' | TMPDIR="$TMP/ro-tmp" "$ROOT/setup.sh" --project "$TMP/project" --dry-run >/dev/null 2>&1; then
     echo "dry-run attempted a filesystem write (read-only TMPDIR made it fail)"
     exit 1
   fi
@@ -151,7 +131,7 @@ test_initializes_agents_docs() {
   new_case
   stub_commands
   git -C "$TMP/project" init -q
-  printf '1\n2\ny\n' | "$ROOT/setup.sh" --planning matt --project "$TMP/project"
+  printf '1\n2\ny\n' | "$ROOT/setup.sh" --project "$TMP/project"
   test -f "$TMP/project/AGENTS.md"
   test -f "$TMP/project/docs/agents/issue-tracker.md"
   test -f "$TMP/project/docs/agents/domain.md"
@@ -163,7 +143,7 @@ test_initializes_agents_docs() {
 test_declined_confirmation_writes_nothing() {
   new_case
   stub_commands
-  printf '1\n1\nn\n' | "$ROOT/setup.sh" --planning matt --project "$TMP/project"
+  printf '1\n1\nn\n' | "$ROOT/setup.sh" --project "$TMP/project"
   test ! -e "$TMP/project/AGENTS.md"
   test ! -e "$TMP/project/docs/agents/issue-tracker.md"
 }
@@ -171,8 +151,8 @@ test_declined_confirmation_writes_nothing() {
 test_rerun_is_idempotent() {
   new_case
   stub_commands
-  printf '1\n1\ny\n' | "$ROOT/setup.sh" --planning matt --project "$TMP/project" --yes
-  printf 'y\n' | "$ROOT/setup.sh" --planning matt --project "$TMP/project" --yes
+  printf '1\n1\ny\n' | "$ROOT/setup.sh" --project "$TMP/project" --yes
+  printf 'y\n' | "$ROOT/setup.sh" --project "$TMP/project" --yes
   assert_eq "$(grep -c 'pi-implementation-orchestrator:start' "$TMP/project/AGENTS.md" | tr -d ' ')" "1"
 }
 
@@ -189,7 +169,7 @@ Keep functions small.
 
 Never commit secrets.
 EOF
-  printf '1\ny\n' | "$ROOT/setup.sh" --planning matt --project "$TMP/project" --yes
+  printf '1\ny\n' | "$ROOT/setup.sh" --project "$TMP/project" --yes
   assert_contains "$TMP/project/AGENTS.md" "# Project rules"
   assert_contains "$TMP/project/AGENTS.md" "Keep functions small."
   assert_contains "$TMP/project/AGENTS.md" "Never commit secrets."
@@ -206,7 +186,7 @@ one
 two
 <!-- pi-implementation-orchestrator:end -->
 EOF
-  if printf 'y\n' | "$ROOT/setup.sh" --planning matt --project "$TMP/project" --yes >/dev/null 2>&1; then
+  if printf 'y\n' | "$ROOT/setup.sh" --project "$TMP/project" --yes >/dev/null 2>&1; then
     echo "duplicate markers accepted"
     exit 1
   fi
@@ -222,7 +202,7 @@ test_reversed_markers_fail_unchanged() {
     printf '%s\n' '<!-- pi-implementation-orchestrator:start -->'
   } >"$TMP/project/AGENTS.md"
   before=$(shasum <"$TMP/project/AGENTS.md")
-  if printf '1\ny\n' | "$ROOT/setup.sh" --planning matt --project "$TMP/project" --yes >/dev/null 2>&1; then
+  if printf '1\ny\n' | "$ROOT/setup.sh" --project "$TMP/project" --yes >/dev/null 2>&1; then
     echo "reversed markers accepted"
     exit 1
   fi
@@ -240,7 +220,7 @@ test_replacement_preserves_bytes() {
     printf '%s\n' '<!-- pi-implementation-orchestrator:end -->'
     printf 'suffix without final newline'
   } >"$TMP/project/AGENTS.md"
-  printf '1\ny\n' | "$ROOT/setup.sh" --planning matt --project "$TMP/project" --yes >/dev/null
+  printf '1\ny\n' | "$ROOT/setup.sh" --project "$TMP/project" --yes >/dev/null
   {
     printf '# Header\n\n'
     printf '%s\n' '<!-- pi-implementation-orchestrator:start -->'
@@ -273,7 +253,7 @@ test_adaptive_review_and_test_policy() {
   assert_contains "$ROOT/README.md" 'high-risk changes are reviewed immediately'
   new_case
   stub_commands
-  printf '1\n1\ny\n' | "$ROOT/setup.sh" --planning matt --project "$TMP/project" >/dev/null
+  printf '1\n1\ny\n' | "$ROOT/setup.sh" --project "$TMP/project" >/dev/null
   assert_contains "$TMP/project/AGENTS.md" 'Every task declares one test obligation: `new-test`, `existing-check`, or `no-new-test`; focused TDD is required only for `new-test` work.'
   assert_contains "$TMP/project/AGENTS.md" 'Review is adaptive and orchestrator-owned: high-risk or dependency-defining changes are reviewed immediately; low-risk changes may be reviewed cumulatively at a wave boundary.'
 }
@@ -281,7 +261,7 @@ test_adaptive_review_and_test_policy() {
 test_missing_project_dir_fails() {
   new_case
   stub_commands
-  if "$ROOT/setup.sh" --planning matt --project "$TMP/nope" >/dev/null 2>&1; then
+  if "$ROOT/setup.sh" --project "$TMP/nope" >/dev/null 2>&1; then
     echo "missing project accepted"
     exit 1
   fi
@@ -324,7 +304,7 @@ test_noninteractive_project_choices() {
   printf '# claude\n' >"$TMP/project/CLAUDE.md"
   printf '# agents\n' >"$TMP/project/AGENTS.md"
   printf 'packages:\n  - a\n' >"$TMP/project/pnpm-workspace.yaml"
-  "$ROOT/setup.sh" --planning matt --project "$TMP/project" --yes \
+  "$ROOT/setup.sh" --project "$TMP/project" --yes \
     --instruction-file AGENTS.md --tracker local --domain-layout multi \
     </dev/null >/dev/null 2>&1
   assert_contains "$TMP/project/AGENTS.md" "pi-implementation-orchestrator:start"
@@ -335,7 +315,7 @@ test_noninteractive_project_choices() {
   new_case
   stub_commands
   printf '# claude\n' >"$TMP/project/CLAUDE.md"
-  "$ROOT/setup.sh" --planning matt --project "$TMP/project" --yes \
+  "$ROOT/setup.sh" --project "$TMP/project" --yes \
     --instruction-file CLAUDE.md --tracker github --domain-layout single \
     </dev/null >/dev/null 2>&1
   assert_contains "$TMP/project/CLAUDE.md" "pi-implementation-orchestrator:start"
@@ -344,7 +324,7 @@ test_noninteractive_project_choices() {
 
   new_case
   stub_commands
-  "$ROOT/setup.sh" --planning matt --project "$TMP/project" --yes \
+  "$ROOT/setup.sh" --project "$TMP/project" --yes \
     --instruction-file AGENTS.md --tracker other --tracker-description "Linear board" --domain-layout single \
     </dev/null >/dev/null 2>&1
   assert_contains "$TMP/project/docs/agents/issue-tracker.md" "Tracker: Linear board."

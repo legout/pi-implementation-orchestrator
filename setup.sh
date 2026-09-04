@@ -5,7 +5,6 @@ ROOT=$(cd "$(dirname "$0")" && pwd)
 START_MARKER='<!-- pi-implementation-orchestrator:start -->'
 END_MARKER='<!-- pi-implementation-orchestrator:end -->'
 
-PLANNING=
 PROJECT=
 DRY_RUN=false
 ASSUME_YES=false
@@ -16,7 +15,7 @@ TRACKER_DESCRIPTION=
 DOMAIN_LAYOUT_CHOICE=auto
 
 usage() {
-  echo "Usage: ./setup.sh --planning matt|superpowers|both [--project PATH|--skip-project]" >&2
+  echo "Usage: ./setup.sh [--project PATH|--skip-project]" >&2
   echo "            [--instruction-file auto|AGENTS.md|CLAUDE.md] [--tracker auto|github|local|other]" >&2
   echo "            [--tracker-description TEXT] [--domain-layout auto|single|multi] [--dry-run] [--yes]" >&2
 }
@@ -35,17 +34,11 @@ run() {
   else "$@"; fi
 }
 
-SUPERPOWERS_SKILLS=(brainstorming writing-plans)
-MATT_PLANNING_SKILLS=(setup-matt-pocock-skills grilling domain-modeling grill-with-docs to-spec to-tickets)
-MATT_REQUIRED_SKILLS=(tdd resolving-merge-conflicts)
+LEGOUT_SKILLS=(shape-design write-implementation-plan prototype-question verification-before-completion systematic-debugging orchestrate-implementation merge-worktree make-release)
 
 parse_args() {
   while [ $# -gt 0 ]; do
     case "$1" in
-    --planning)
-      PLANNING=${2-}
-      shift 2
-      ;;
     --project)
       PROJECT=${2-}
       shift 2
@@ -85,11 +78,6 @@ parse_args() {
     *) die "unknown flag: $1" ;;
     esac
   done
-
-  case "$PLANNING" in
-  matt | superpowers | both) ;;
-  *) die "invalid --planning value: ${PLANNING:-<missing>}" ;;
-  esac
 
   case "$INSTRUCTION_FILE_CHOICE" in
   auto | AGENTS.md | CLAUDE.md) ;;
@@ -230,31 +218,14 @@ choose_domain_layout() {
 }
 
 install_skills() {
-  if [ "$PLANNING" = superpowers ] || [ "$PLANNING" = both ]; then
-    local args=(npx skills add obra/superpowers)
-    local s
-    for s in "${SUPERPOWERS_SKILLS[@]}"; do args+=(--skill "$s"); done
-    args+=(--global --agent pi --yes --copy)
-    run "${args[@]}"
-  fi
-
-  if [ "$PLANNING" = matt ] || [ "$PLANNING" = both ]; then
-    local args=(npx skills add mattpocock/skills)
-    local s
-    for s in "${MATT_PLANNING_SKILLS[@]}" "${MATT_REQUIRED_SKILLS[@]}"; do args+=(--skill "$s"); done
-    args+=(--global --agent pi --yes --copy)
-    run "${args[@]}"
-  else
-    local args=(npx skills add mattpocock/skills)
-    local s
-    for s in "${MATT_REQUIRED_SKILLS[@]}"; do args+=(--skill "$s"); done
-    args+=(--global --agent pi --yes --copy)
-    run "${args[@]}"
-  fi
+  local args=(npx skills add legout/skills)
+  local s
+  for s in "${LEGOUT_SKILLS[@]}"; do args+=(--skill "$s"); done
+  args+=(--global --agent pi --yes --copy)
+  run "${args[@]}"
 
   run pi install npm:pi-subagents
   run pi install npm:pi-intercom
-  run npx skills add legout/skills --skill orchestrate-implementation --skill merge-worktree --skill make-release --global --agent pi --yes --copy
 }
 
 render_workflow_block() {

@@ -1,6 +1,6 @@
 # pi-implementation-orchestrator
 
-Plan features with Superpowers or Matt Pocock skills, then execute the plans with isolated Pi workers, per-task test obligations, adaptive independent review, and orchestrator-owned integration.
+Plan features with the consolidated [`legout/skills`](https://github.com/legout/skills) planning stack, then execute the plans with isolated Pi workers, per-task test obligations, adaptive independent review, and orchestrator-owned integration.
 
 ## Architecture
 
@@ -37,7 +37,7 @@ Then use the setup prompt to set up a new project or update an existing one:
 /setup-implementation-orchestrator
 ```
 
-The prompt asks for the planning profile, project, and unresolved project choices. It previews the exact changes with `--dry-run`, obtains your explicit approval, and only then invokes `setup.sh` to install runtime and selected planning skills globally and create or update project documentation. Run the prompt again to modify an existing project's orchestrator configuration. Native package installation never runs setup, installs dependencies, or creates target-project files.
+The prompt asks for the project and unresolved project choices. It previews the exact changes with `--dry-run`, obtains your explicit approval, and only then invokes `setup.sh` to install runtime and selected planning skills globally and create or update project documentation. Run the prompt again to modify an existing project's orchestrator configuration. Native package installation never runs setup, installs dependencies, or creates target-project files.
 
 To update or remove the package:
 
@@ -46,44 +46,35 @@ pi update git:github.com/legout/pi-implementation-orchestrator
 pi remove git:github.com/legout/pi-implementation-orchestrator
 ```
 
-For a pinned tag or commit, append `@<ref>` to the Git source. A direct alternative is to clone this repository and run `./setup.sh --planning both --project /path/to/repo`; `./setup.sh --help` lists explicit choice flags, and `--dry-run` previews without touching anything.
+For a pinned tag or commit, append `@<ref>` to the Git source. A direct alternative is to clone this repository and run `./setup.sh --project /path/to/repo`; `./setup.sh --help` lists explicit choice flags, and `--dry-run` previews without touching anything.
 
-## Planning profiles
+> **Breaking change:** the `--planning matt|superpowers|both` flag was removed. Setup now installs one consolidated planning stack from `legout/skills`; older commands fail with "unknown flag". Remove `--planning <profile>` from saved commands.
 
-Exact skills installed per profile:
+## Installed skills
 
-| Skill | Source | `matt` | `superpowers` | `both` |
-|---|---|---|---|---|
-| `setup-matt-pocock-skills` | mattpocock/skills | ✅ | — | ✅ |
-| `grilling` | mattpocock/skills | ✅ | — | ✅ |
-| `domain-modeling` | mattpocock/skills | ✅ | — | ✅ |
-| `grill-with-docs` | mattpocock/skills | ✅ | — | ✅ |
-| `to-spec` | mattpocock/skills | ✅ | — | ✅ |
-| `to-tickets` | mattpocock/skills | ✅ | — | ✅ |
-| `tdd` | mattpocock/skills | ✅ | ✅ | ✅ |
-| `resolving-merge-conflicts` | mattpocock/skills | ✅ | ✅ | ✅ |
-| `brainstorming` | obra/superpowers | — | ✅ | ✅ |
-| `writing-plans` | obra/superpowers | — | ✅ | ✅ |
-| `orchestrate-implementation` | legout/skills | ✅ | ✅ | ✅ |
-| `merge-worktree` | legout/skills | ✅ | ✅ | ✅ |
-| `make-release` | legout/skills | ✅ | ✅ | ✅ |
+`setup.sh` installs exactly this set from `legout/skills` (one invocation, global, Pi agent):
 
-Packages for every profile: `pi install npm:pi-subagents`, `pi install npm:pi-intercom`.
+| Skill | Role | Consolidates / replaces |
+|---|---|---|
+| `shape-design` | idea shaping and design approval | Superpowers `brainstorming`, Matt's `grilling`, `domain-modeling`, `to-spec` |
+| `write-implementation-plan` | executable implementation plans | Superpowers `writing-plans`, Matt's `to-tickets` |
+| `prototype-question` | disposable feasibility spikes | hands off from `shape-design`'s Spike path |
+| `verification-before-completion` | evidence-before-claims discipline | Superpowers `verification-before-completion` |
+| `systematic-debugging` | reproduction and root-cause method | Matt's `diagnosing-bugs`, Superpowers `systematic-debugging` |
+| `orchestrate-implementation` | worker orchestration | Superpowers worktree patterns; carries Matt's `tdd` guidance for `new-test` tasks |
+| `merge-worktree` | worktree integration | Superpowers `finishing-a-development-branch`; resolves conflicts inline (no `resolving-merge-conflicts` dependency) |
+| `make-release` | release publication | — |
 
-### Exclusions (deliberate)
+Packages: `pi install npm:pi-subagents`, `pi install npm:pi-intercom`.
 
-Never installed:
+### Not installed by default
 
-- Matt's `implement` and `code-review` — workers use TDD for `new-test` work; the orchestrator supplies independent reviewers.
-- Superpowers execution, review, worktree, and branch-finishing skills (`subagent-driven-development`, `executing-plans`, `requesting-code-review`, …) — the orchestrator owns those responsibilities.
-
-Whole upstream packs are never installed; only the exact skills above.
+Additional `legout/skills` entries you can add manually: `capture-project-vision`, `doc-coauthoring`, `simplify-code`, `review-codebase-architecture`. The original upstream packs (`mattpocock/skills`, `obra/superpowers`) are never installed — their workflows live on in the consolidated skills above. Whole-pack installation is never used.
 
 ## Workflows
 
-- **Superpowers planning:** `brainstorming` → `writing-plans` → `orchestrate-implementation` executes the plan.
-- **Matt planning:** `setup-matt-pocock-skills` → `grilling` / `domain-modeling` / `grill-with-docs` → `to-spec` → `to-tickets` → `orchestrate-implementation` executes the tickets.
-- **Mixed:** use either planner per feature; both feed the same orchestrator.
+- **Planning:** `shape-design` (idea → approved design or written spec; feasibility questions hand off to `prototype-question`) → `write-implementation-plan` (spec → executable, testable plan) → `orchestrate-implementation` executes the plan.
+- **During execution:** workers apply `systematic-debugging` to failing checks and `verification-before-completion` before claiming done; the orchestrator supplies independent adaptive review.
 
 ### Ticket and plan inputs
 
@@ -91,7 +82,7 @@ Plans and tickets must reference their exact feature sources (ADR, specification
 
 ## Worktree integration
 
-The setup command installs [`merge-worktree`](https://github.com/legout/skills/tree/main/skills/merge-worktree). Use `/skill:merge-worktree` to integrate a registered worktree locally or through an automatically merged GitHub pull request. Local mode validates on an isolated integration branch before moving the target. Both modes default to merge commits, run project checks, regenerate conflicted lockfiles with their package manager, attempt intent-preserving conflict resolution through Matt Pocock's `resolving-merge-conflicts` skill, and verify the pushed target. Pass `--clean-up` to remove the successfully merged source worktree automatically; otherwise the skill asks before removal. Branches are retained unless separately requested.
+The setup command installs [`merge-worktree`](https://github.com/legout/skills/tree/main/skills/merge-worktree). Use `/skill:merge-worktree` to integrate a registered worktree locally or through an automatically merged GitHub pull request. Local mode validates on an isolated integration branch before moving the target. Both modes default to merge commits, run project checks, regenerate conflicted lockfiles with their package manager, resolve remaining conflicts inline from source intent, and verify the pushed target. Pass `--clean-up` to remove the successfully merged source worktree automatically; otherwise the skill asks before removal. Branches are retained unless separately requested.
 
 ## Releases
 
@@ -138,7 +129,7 @@ Persistent peers (`architecture-peer`, `domain-peer`, `quality-peer`) run as exp
 
 ## Operations
 
-- **Dry run:** `./setup.sh --planning both --project /path --dry-run` prints every command and preview; nothing is executed or written. The setup prompt always performs this preview before asking for approval.
+- **Dry run:** `./setup.sh --project /path --dry-run` prints every command and preview; nothing is executed or written. The setup prompt always performs this preview before asking for approval.
 - **Update / rerun:** rerunning setup replaces the one managed block and regenerates `docs/agents/` files idempotently; surrounding content survives. Ambiguous marker counts abort safely.
 - **Worker fixes and recovery:** after review, a worker is resumed for fixes only when its managed worktree still exists and the child is resumable; otherwise a fresh fix worker starts in a new managed worktree from the exact original base and applies the durable prior handoff patch before accepted findings. The recovery boundary is durable handoff patch paths, not child session or cwd survival.
 - **Uninstall:** remove the Pi package with `pi remove git:github.com/legout/pi-implementation-orchestrator`, remove the managed block from your instruction file, delete `docs/agents/`, and uninstall upstream skills with `npx skills remove <skill> --global --agent pi`.
@@ -161,8 +152,8 @@ Runs on every push and pull request via GitHub Actions.
 
 ## Attribution
 
-- Planning skills: [obra/superpowers](https://github.com/obra/superpowers) and [mattpocock/skills](https://github.com/mattpocock/skills) — installed at runtime via [vercel-labs/skills](https://github.com/vercel-labs/skills) (Agent Skills CLI); upstream licenses apply to installed skills. This repository vendors nothing.
-- Orchestration design: this repository. Runtime skills: [legout/skills](https://github.com/legout/skills). Both use the MIT license.
+- All planning and orchestration skills: [`legout/skills`](https://github.com/legout/skills) — consolidated from `obra/superpowers`, `mattpocock/skills`, and other MIT-licensed upstreams with pinned provenance in its `sources.json`; installed at runtime via [vercel-labs/skills](https://github.com/vercel-labs/skills) (Agent Skills CLI). This repository vendors nothing.
+- Orchestration design: this repository. Both use the MIT license.
 
 ## License
 

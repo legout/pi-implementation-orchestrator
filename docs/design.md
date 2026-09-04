@@ -2,7 +2,7 @@
 
 ## Goal
 
-Publish a safe Pi installer and setup prompt for implementation-orchestration skills maintained in `legout/skills`, with selected Superpowers and Matt Pocock planning workflows, workers with per-task test obligations, native Pi subagents, optional persistent intercom peers, and interactive project setup.
+Publish a safe Pi installer and setup prompt for implementation-orchestration and planning skills maintained in `legout/skills`, workers with per-task test obligations, native Pi subagents, optional persistent intercom peers, and interactive project setup.
 
 ## Repository
 
@@ -42,6 +42,8 @@ pi-implementation-orchestrator/
 ├── prompts/setup-implementation-orchestrator.md
 ├── tests/setup_test.sh
 └── docs/design.md
+
+Implementation plans live in `docs/plans/` (date-prefixed Markdown).
 ```
 
 ## Installation Scope
@@ -59,67 +61,42 @@ After installation, invoke `/setup-implementation-orchestrator`. That prompt loc
 Direct setup remains available from a checkout:
 
 ```bash
-./setup.sh --planning matt --project /path/to/repo
-./setup.sh --planning superpowers --project /path/to/repo
-./setup.sh --planning both --project /path/to/repo
-./setup.sh --planning both --project /path/to/repo --dry-run
+./setup.sh --project /path/to/repo
+./setup.sh --skip-project
+./setup.sh --project /path/to/repo --dry-run
 ```
 
-Project choices can be made non-interactively with `--instruction-file auto|AGENTS.md|CLAUDE.md`, `--tracker auto|github|local|other`, `--tracker-description TEXT` (required for `other`), and `--domain-layout auto|single|multi`. The script installs `orchestrate-implementation`, `merge-worktree`, and `make-release` from `legout/skills` globally for Pi, installs Matt Pocock's `resolving-merge-conflicts` dependency, and ensures `npm:pi-subagents` and `npm:pi-intercom` are installed through Pi.
+Project choices can be made non-interactively with `--instruction-file auto|AGENTS.md|CLAUDE.md`, `--tracker auto|github|local|other`, `--tracker-description TEXT` (required for `other`), and `--domain-layout auto|single|multi`. The script installs the selected skills from `legout/skills` globally for Pi and ensures `npm:pi-subagents` and `npm:pi-intercom` are installed through Pi.
 
-## Selected Upstream Skills
+## Selected Skills
 
-### Superpowers profile
+Install exactly this set from `legout/skills`; no other upstream skill repositories:
 
-Install only:
+- `shape-design` — idea shaping and design approval (consolidates Superpowers brainstorming and Matt's grilling/domain-modeling/to-spec workflows).
+- `write-implementation-plan` — executable implementation plans (consolidates Superpowers writing-plans and Matt's to-tickets decomposition).
+- `prototype-question` — disposable spikes; `shape-design` hands feasibility questions to it.
+- `verification-before-completion` — evidence-before-claims discipline for workers.
+- `systematic-debugging` — reproduction and root-cause method for failing checks.
+- `orchestrate-implementation` — worker orchestration; carries the TDD/test-seam guidance for `new-test` tasks.
+- `merge-worktree` — worktree integration; resolves conflicts inline from source intent.
+- `make-release` — release publication.
 
-- `brainstorming`
-- `writing-plans`
-
-Do not install Superpowers execution, review, branch-finishing, or worktree orchestration skills. `orchestrate-implementation` owns those responsibilities.
-
-### Matt profile
-
-Install only:
-
-- `setup-matt-pocock-skills`
-- `grilling`
-- `domain-modeling`
-- `grill-with-docs`
-- `to-spec`
-- `to-tickets`
-- `tdd`
-- `resolving-merge-conflicts`
-
-Do not install Matt's `implement` or `code-review` skills. Workers use TDD for `new-test` tasks; the orchestrator supplies independent reviewers.
-
-### Both profile
-
-Install the union of the two selected profiles without duplicates. TDD remains required for `new-test` tasks. Install `resolving-merge-conflicts` for every profile because `merge-worktree` uses it when integration conflicts occur.
+Workers get TDD discipline through `orchestrate-implementation`; the orchestrator supplies independent reviewers. Additional `legout/skills` entries (`capture-project-vision`, `doc-coauthoring`, `simplify-code`, `review-codebase-architecture`) are available but not installed by default.
 
 ## Upstream Installation
 
-Use the standard Agent Skills CLI with explicit skill names, global scope, and Pi as the target agent. Do not use whole-pack installation.
-
-Example:
+Use the standard Agent Skills CLI with explicit skill names, global scope, and Pi as the target agent. Do not use whole-pack installation. All skills come from one repository in one invocation:
 
 ```bash
-npx skills add obra/superpowers \
-  --skill brainstorming \
-  --skill writing-plans \
-  --global --agent pi --yes
-```
-
-```bash
-npx skills add mattpocock/skills \
-  --skill setup-matt-pocock-skills \
-  --skill grilling \
-  --skill domain-modeling \
-  --skill grill-with-docs \
-  --skill to-spec \
-  --skill to-tickets \
-  --skill tdd \
-  --skill resolving-merge-conflicts \
+npx skills add legout/skills \
+  --skill shape-design \
+  --skill write-implementation-plan \
+  --skill prototype-question \
+  --skill verification-before-completion \
+  --skill systematic-debugging \
+  --skill orchestrate-implementation \
+  --skill merge-worktree \
+  --skill make-release \
   --global --agent pi --yes
 ```
 
@@ -127,7 +104,7 @@ The setup script reports installed, skipped, and already-present components. It 
 
 ## Worktree Integration
 
-The externally maintained [`merge-worktree`](https://github.com/legout/skills/tree/main/skills/merge-worktree) skill integrates a registered source worktree either locally or through GitHub. Local mode first merges and validates on an isolated temporary integration branch, then fast-forwards the unchanged target to the verified merge commit. Both modes default to merge commits, validate before and after integration, push and verify the target, and never force-push. PR mode uses the `github` skill, waits for required checks, and merges automatically without bypassing branch protection. Conflicts load Matt Pocock's `resolving-merge-conflicts` skill and are resolved from source intent before checks resume.
+The externally maintained [`merge-worktree`](https://github.com/legout/skills/tree/main/skills/merge-worktree) skill integrates a registered source worktree either locally or through GitHub. Local mode first merges and validates on an isolated temporary integration branch, then fast-forwards the unchanged target to the verified merge commit. Both modes default to merge commits, validate before and after integration, push and verify the target, and never force-push. PR mode uses the `github` skill, waits for required checks, and merges automatically without bypassing branch protection. Conflicts are resolved inline from source intent before checks resume.
 
 Cleanup is a post-success operation. `--clean-up` removes and prunes the source worktree automatically; without the flag the skill asks. It never removes a dirty or unmerged worktree and does not delete branches unless separately requested.
 
@@ -139,7 +116,7 @@ Python releases optionally publish to PyPI. The first publishing run confirms `[
 
 ## Single Setup Prompt for New and Existing Projects
 
-`prompts/setup-implementation-orchestrator.md` is the user-facing command for both new-project setup and existing-project reconfiguration. It accepts optional profile and project arguments; missing inputs are requested rather than guessed. For a supplied project it inspects existing instruction files, GitHub remotes, and monorepo signals, then turns the resulting answers into explicit setup flags. The dry-run output is shown verbatim for approval before any mutation. Setup is always delegated to `setup.sh`, so direct and prompt-driven setup share validation, rendering, idempotence, and safety behavior. Re-run the same prompt to modify an existing project's orchestrator configuration.
+`prompts/setup-implementation-orchestrator.md` is the user-facing command for both new-project setup and existing-project reconfiguration. It accepts an optional project argument; missing inputs are requested rather than guessed. For a supplied project it inspects existing instruction files, GitHub remotes, and monorepo signals, then turns the resulting answers into explicit setup flags. The dry-run output is shown verbatim for approval before any mutation. Setup is always delegated to `setup.sh`, so direct and prompt-driven setup share validation, rendering, idempotence, and safety behavior. Re-run the same prompt to modify an existing project's orchestrator configuration.
 
 When `--project` is supplied, setup asks only unresolved project questions:
 
@@ -171,7 +148,7 @@ Re-running setup updates the one managed block and generated files idempotently.
 
 Validation evidence is mandatory for every task; a new test is not. During preflight each task receives exactly one obligation:
 
-- `new-test`: meaningful behavior, bug regression, branching/state, parsing/validation, security, permissions, money, destructive data handling, concurrency, public contracts, or behavior without existing coverage. Load `skill: "tdd"` and require red-green-refactor evidence.
+- `new-test`: meaningful behavior, bug regression, branching/state, parsing/validation, security, permissions, money, destructive data handling, concurrency, public contracts, or behavior without existing coverage. Follow the TDD guidance carried by `orchestrate-implementation` and require red-green-refactor evidence.
 - `existing-check`: existing tests already exercise the affected behavior. Run and report the named focused checks without adding redundant tests.
 - `no-new-test`: documentation, formatting, comments, static metadata, generated artifacts, typo correction, or similar low-yield changes. Run the smallest meaningful validation.
 
@@ -205,10 +182,10 @@ Verify:
 
 1. `package.json` parses and declares only the setup prompt;
 2. the setup prompt requires a dry-run and approval before `--yes`;
-3. each planning profile invokes only its selected upstream skills;
+3. the installer invokes exactly one `legout/skills` installation with the full selected skill set;
 4. all runtime skills are installed from `legout/skills`;
-5. `tdd` is installed for Matt and both profiles;
-6. excluded implementation/review skills never appear;
+5. the removed `--planning` flag is rejected as an unknown flag;
+6. no other upstream skill repository (`mattpocock/skills`, `obra/superpowers`) appears in install commands;
 7. explicit project-choice flags bypass prompts and validate values;
 8. dry-run performs no package or project writes;
 9. interactive choices generate the intended managed block and docs;
@@ -228,8 +205,8 @@ The root README is short but comprehensive. It includes:
 - purpose and architecture;
 - prerequisites;
 - quick start;
-- planning-profile skill tables;
-- typical Superpowers, Matt, and mixed workflows;
+- installed-skills table with consolidation mapping;
+- the planning-to-orchestration workflow;
 - ticket/plan input behavior;
 - project documentation scope and precedence;
 - execution modes;
@@ -252,9 +229,7 @@ After implementation, tests, and independent review pass:
 ## Non-Goals
 
 - Vendoring complete upstream skill repositories.
-- Replacing Superpowers or Matt planning methods.
-- Installing Matt `implement` or `code-review`.
-- Installing Superpowers implementation/review orchestration.
+- Installing other upstream skill packs (`mattpocock/skills`, `obra/superpowers`) — their workflows are consolidated in `legout/skills`.
 - Running all workers as interactive Herdr sessions.
 - Automatically resolving semantic merge conflicts.
 - Publishing releases or packages in the first version.
