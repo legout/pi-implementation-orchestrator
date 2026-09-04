@@ -14,7 +14,7 @@ planning skills
   → separate publication authority
 ```
 
-The repository ships: `setup.sh` (dependency-free installer and project initializer), the packaged `orchestrate-implementation` skill, `prompts/init-orchestrator-project.md` (model-guided reconfiguration), and shell tests. `pi-subagents` owns child lifecycle (fresh contexts, managed worktrees, missions, artifacts, review, recovery); `pi-intercom` is limited to named persistent read-only peers.
+The repository ships: `package.json` (the native Pi manifest), `setup.sh` (dependency-free installer and project initializer), the packaged `orchestrate-implementation` and `setup-implementation-orchestrator` skills, `prompts/init-orchestrator-project.md` (model-guided reconfiguration), and shell tests. `pi-subagents` owns child lifecycle (fresh contexts, managed worktrees, missions, artifacts, review, recovery); `pi-intercom` is limited to named persistent read-only peers.
 
 ## Prerequisites
 
@@ -25,13 +25,28 @@ The repository ships: `setup.sh` (dependency-free installer and project initiali
 
 ## Quick start
 
+Install the native Pi package (resource loading is passive):
+
 ```bash
-git clone https://github.com/legout/pi-implementation-orchestrator.git
-cd pi-implementation-orchestrator
-./setup.sh --planning both --project /path/to/repo
+pi install git:github.com/legout/pi-implementation-orchestrator
 ```
 
-The installer installs selected planning skills globally for Pi, ensures `pi-subagents` and `pi-intercom`, installs this repository's `orchestrate-implementation` skill, and interactively initializes your project. `./setup.sh --help` shows all flags; `--dry-run` previews without touching anything.
+Then explicitly configure a project from Pi:
+
+```text
+/skill:setup-implementation-orchestrator
+```
+
+The setup skill asks for the planning profile, project, and unresolved project choices. It previews the exact changes with `--dry-run`, obtains your explicit approval, and only then invokes `setup.sh` to install selected planning skills globally and write project documentation. Native package installation never runs setup, installs dependencies, or creates target-project files.
+
+To update or remove the package:
+
+```bash
+pi update git:github.com/legout/pi-implementation-orchestrator
+pi remove git:github.com/legout/pi-implementation-orchestrator
+```
+
+For a pinned tag or commit, append `@<ref>` to the Git source. A direct alternative is to clone this repository and run `./setup.sh --planning both --project /path/to/repo`; `./setup.sh --help` lists explicit choice flags, and `--dry-run` previews without touching anything.
 
 ## Planning profiles
 
@@ -110,10 +125,10 @@ Persistent peers (`architecture-peer`, `domain-peer`, `quality-peer`) run as exp
 
 ## Operations
 
-- **Dry run:** `./setup.sh --planning both --project /path --dry-run` prints every command and preview; nothing is executed or written.
+- **Dry run:** `./setup.sh --planning both --project /path --dry-run` prints every command and preview; nothing is executed or written. The setup skill always performs this preview before asking for approval.
 - **Update / rerun:** rerunning setup replaces the one managed block and regenerates `docs/agents/` files idempotently; surrounding content survives. Ambiguous marker counts abort safely.
 - **Worker fixes and recovery:** after review, a worker is resumed for fixes only when its managed worktree still exists and the child is resumable; otherwise a fresh fix worker starts in a new managed worktree from the exact original base and applies the durable prior handoff patch before accepted findings. The recovery boundary is durable handoff patch paths, not child session or cwd survival.
-- **Uninstall:** remove the managed block from your instruction file, delete `docs/agents/`, and uninstall skills with `npx skills remove <skill> --global --agent pi`.
+- **Uninstall:** remove the Pi package with `pi remove git:github.com/legout/pi-implementation-orchestrator`, remove the managed block from your instruction file, delete `docs/agents/`, and uninstall upstream skills with `npx skills remove <skill> --global --agent pi`.
 - **Troubleshooting:** run with `--dry-run` first; check `pi install` output; see [pi docs](https://github.com/earendil-works/pi-coding-agent).
 
 ### Limitations

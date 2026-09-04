@@ -10,9 +10,15 @@ PROJECT=
 DRY_RUN=false
 ASSUME_YES=false
 SKIP_PROJECT=false
+INSTRUCTION_FILE_CHOICE=auto
+TRACKER_CHOICE=auto
+TRACKER_DESCRIPTION=
+DOMAIN_LAYOUT_CHOICE=auto
 
 usage() {
-  echo "Usage: ./setup.sh --planning matt|superpowers|both [--project PATH|--skip-project] [--dry-run] [--yes]" >&2
+  echo "Usage: ./setup.sh --planning matt|superpowers|both [--project PATH|--skip-project]" >&2
+  echo "            [--instruction-file auto|AGENTS.md|CLAUDE.md] [--tracker auto|github|local|other]" >&2
+  echo "            [--tracker-description TEXT] [--domain-layout auto|single|multi] [--dry-run] [--yes]" >&2
 }
 
 die() {
@@ -56,6 +62,22 @@ parse_args() {
       ASSUME_YES=true
       shift
       ;;
+    --instruction-file)
+      INSTRUCTION_FILE_CHOICE=${2-}
+      shift 2
+      ;;
+    --tracker)
+      TRACKER_CHOICE=${2-}
+      shift 2
+      ;;
+    --tracker-description)
+      TRACKER_DESCRIPTION=${2-}
+      shift 2
+      ;;
+    --domain-layout)
+      DOMAIN_LAYOUT_CHOICE=${2-}
+      shift 2
+      ;;
     -h | --help)
       usage
       exit 0
@@ -67,6 +89,27 @@ parse_args() {
   case "$PLANNING" in
   matt | superpowers | both) ;;
   *) die "invalid --planning value: ${PLANNING:-<missing>}" ;;
+  esac
+
+  case "$INSTRUCTION_FILE_CHOICE" in
+  auto | AGENTS.md | CLAUDE.md) ;;
+  *) die "invalid --instruction-file value: ${INSTRUCTION_FILE_CHOICE:-<missing>}" ;;
+  esac
+
+  case "$TRACKER_CHOICE" in
+  auto | github | local | other) ;;
+  *) die "invalid --tracker value: ${TRACKER_CHOICE:-<missing>}" ;;
+  esac
+  if [ "$TRACKER_CHOICE" = other ]; then
+    case "$TRACKER_DESCRIPTION" in
+    *[![:space:]]*) ;;
+    *) die "--tracker other requires a non-empty --tracker-description" ;;
+    esac
+  fi
+
+  case "$DOMAIN_LAYOUT_CHOICE" in
+  auto | single | multi) ;;
+  *) die "invalid --domain-layout value: ${DOMAIN_LAYOUT_CHOICE:-<missing>}" ;;
   esac
 
   if [ -n "$PROJECT" ] && "$SKIP_PROJECT"; then
@@ -115,6 +158,10 @@ ask_choice() {
 }
 
 choose_instruction_file() {
+  if [ "$INSTRUCTION_FILE_CHOICE" != auto ]; then
+    echo "$INSTRUCTION_FILE_CHOICE"
+    return
+  fi
   if [ -f "$PROJECT/CLAUDE.md" ] && [ -f "$PROJECT/AGENTS.md" ]; then
     ask_choice "Instruction file" "CLAUDE.md" "AGENTS.md"
   elif [ -f "$PROJECT/CLAUDE.md" ]; then
@@ -127,6 +174,20 @@ choose_instruction_file() {
 }
 
 choose_tracker() {
+  case "$TRACKER_CHOICE" in
+  github)
+    echo "GitHub Issues"
+    return
+    ;;
+  local)
+    echo "Local Markdown"
+    return
+    ;;
+  other)
+    echo "$TRACKER_DESCRIPTION"
+    return
+    ;;
+  esac
   local tracker
   if git -C "$PROJECT" remote get-url origin 2>/dev/null | grep -q 'github.com'; then
     tracker=$(ask_choice "Issue tracker" "GitHub Issues" "Local Markdown" "Other")
@@ -151,6 +212,16 @@ has_monorepo_signals() {
 }
 
 choose_domain_layout() {
+  case "$DOMAIN_LAYOUT_CHOICE" in
+  single)
+    echo "Single context"
+    return
+    ;;
+  multi)
+    echo "Multiple contexts"
+    return
+    ;;
+  esac
   if has_monorepo_signals; then
     ask_choice "Domain layout" "Single context" "Multiple contexts"
   else

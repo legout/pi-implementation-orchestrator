@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+NODE=$(command -v node || true)
 TMP=
 
 cleanup() { test -z "${TMP:-}" || rm -rf "$TMP"; }
@@ -95,6 +96,26 @@ test_rejects_bad_args() {
   fi
   if "$ROOT/setup.sh" --planning matt --project "$TMP/project" --skip-project >/dev/null 2>&1; then
     echo "both targets accepted"
+    exit 1
+  fi
+  if "$ROOT/setup.sh" --planning matt --skip-project --instruction-file nope.md >/dev/null 2>&1; then
+    echo "invalid instruction-file accepted"
+    exit 1
+  fi
+  if "$ROOT/setup.sh" --planning matt --skip-project --tracker bogus >/dev/null 2>&1; then
+    echo "invalid tracker accepted"
+    exit 1
+  fi
+  if "$ROOT/setup.sh" --planning matt --skip-project --tracker other >/dev/null 2>&1; then
+    echo "tracker other without description accepted"
+    exit 1
+  fi
+  if "$ROOT/setup.sh" --planning matt --skip-project --tracker other --tracker-description "  " >/dev/null 2>&1; then
+    echo "blank tracker description accepted"
+    exit 1
+  fi
+  if "$ROOT/setup.sh" --planning matt --skip-project --domain-layout monorepo >/dev/null 2>&1; then
+    echo "invalid domain-layout accepted"
     exit 1
   fi
 }
@@ -280,6 +301,81 @@ test_skill_recovery_contract() {
   assert_contains "$ROOT/README.md" "durable handoff patch paths"
 }
 
+test_pi_package_manifest() {
+  [ -n "$NODE" ] || {
+    echo "node not available"
+    exit 1
+  }
+  "$NODE" -e '
+    const p = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    const fail = (m) => { console.error(m); process.exit(1); };
+    if (p.name !== "pi-implementation-orchestrator") fail("bad name: " + p.name);
+    if (!Array.isArray(p.keywords) || !p.keywords.includes("pi-package")) fail("missing pi-package keyword");
+    if (!p.pi || !Array.isArray(p.pi.skills) || !p.pi.skills.includes("./skills")) fail("pi.skills missing ./skills");
+    if (!p.pi || !Array.isArray(p.pi.prompts) || !p.pi.prompts.includes("./prompts")) fail("pi.prompts missing ./prompts");
+  ' "$ROOT/package.json"
+}
+
+test_setup_skill_contract() {
+  local skill="$ROOT/skills/setup-implementation-orchestrator/SKILL.md"
+  test -f "$skill" || {
+    echo "missing skill: $skill"
+    exit 1
+  }
+  local frontmatter
+  frontmatter=$(awk 'NR == 1 && $0 == "---" { started = 1; next } started && $0 == "---" { found = 1; exit } started { print } END { if (!found) exit 1 }' "$skill")
+  printf '%s\n' "$frontmatter" | grep -Fqx -- 'name: setup-implementation-orchestrator'
+  printf '%s\n' "$frontmatter" | grep -Fqx -- 'disable-model-invocation: true'
+  printf '%s\n' "$frontmatter" | grep -F -- 'description:' >/dev/null
+  assert_contains "$skill" "disable-model-invocation: true"
+  assert_contains "$skill" "../../setup.sh"
+  assert_contains "$skill" "--instruction-file"
+  assert_contains "$skill" "--tracker"
+  assert_contains "$skill" "--domain-layout"
+  assert_contains "$skill" "approval"
+  local dry_line yes_line
+  dry_line=$(grep -n -m1 -F -- '--dry-run' "$skill" | cut -d: -f1)
+  yes_line=$(grep -n -m1 -F -- '--yes' "$skill" | cut -d: -f1)
+  if [ -z "$dry_line" ] || [ -z "$yes_line" ] || [ "$dry_line" -ge "$yes_line" ]; then
+    echo "skill must require --dry-run before the --yes mutation"
+    exit 1
+  fi
+}
+
+test_noninteractive_project_choices() {
+  new_case
+  stub_commands
+  git -C "$TMP/project" init -q
+  git -C "$TMP/project" remote add origin https://github.com/example/repo.git
+  printf '# claude\n' >"$TMP/project/CLAUDE.md"
+  printf '# agents\n' >"$TMP/project/AGENTS.md"
+  printf 'packages:\n  - a\n' >"$TMP/project/pnpm-workspace.yaml"
+  "$ROOT/setup.sh" --planning matt --project "$TMP/project" --yes \
+    --instruction-file AGENTS.md --tracker local --domain-layout multi \
+    </dev/null >/dev/null 2>&1
+  assert_contains "$TMP/project/AGENTS.md" "pi-implementation-orchestrator:start"
+  assert_eq "$(cat "$TMP/project/CLAUDE.md")" "# claude"
+  assert_contains "$TMP/project/docs/agents/issue-tracker.md" "Tracker: Local Markdown."
+  assert_contains "$TMP/project/docs/agents/domain.md" "Layout: multiple contexts."
+
+  new_case
+  stub_commands
+  printf '# claude\n' >"$TMP/project/CLAUDE.md"
+  "$ROOT/setup.sh" --planning matt --project "$TMP/project" --yes \
+    --instruction-file CLAUDE.md --tracker github --domain-layout single \
+    </dev/null >/dev/null 2>&1
+  assert_contains "$TMP/project/CLAUDE.md" "pi-implementation-orchestrator:start"
+  assert_contains "$TMP/project/docs/agents/issue-tracker.md" "Tracker: GitHub Issues."
+  assert_contains "$TMP/project/docs/agents/domain.md" "Layout: single context."
+
+  new_case
+  stub_commands
+  "$ROOT/setup.sh" --planning matt --project "$TMP/project" --yes \
+    --instruction-file AGENTS.md --tracker other --tracker-description "Linear board" --domain-layout single \
+    </dev/null >/dev/null 2>&1
+  assert_contains "$TMP/project/docs/agents/issue-tracker.md" "Tracker: Linear board."
+}
+
 main() {
   local failed=0
   for t in $(declare -F | awk '{print $3}' | grep '^test_'); do
@@ -288,7 +384,7 @@ main() {
       failed=1
     fi
   done
-  if [ "$failed" != "0" ]; then
+  if [ "$failed" != 0 ]; then
     echo "tests failed" >&2
     exit 1
   fi
