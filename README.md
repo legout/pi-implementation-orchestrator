@@ -61,9 +61,12 @@ Exact skills installed per profile:
 | `to-spec` | mattpocock/skills | ✅ | — | ✅ |
 | `to-tickets` | mattpocock/skills | ✅ | — | ✅ |
 | `tdd` | mattpocock/skills | ✅ | ✅ | ✅ |
+| `resolving-merge-conflicts` | mattpocock/skills | ✅ | ✅ | ✅ |
 | `brainstorming` | obra/superpowers | — | ✅ | ✅ |
 | `writing-plans` | obra/superpowers | — | ✅ | ✅ |
 | `orchestrate-implementation` | this repository | ✅ | ✅ | ✅ |
+| `merge-worktree` | legout/skills | ✅ | ✅ | ✅ |
+| `make-release` | legout/skills | ✅ | ✅ | ✅ |
 
 Packages for every profile: `pi install npm:pi-subagents`, `pi install npm:pi-intercom`.
 
@@ -85,6 +88,16 @@ Whole upstream packs are never installed; only the exact skills above.
 ### Ticket and plan inputs
 
 Plans and tickets must reference their exact feature sources (ADR, specification, or issue). The orchestrator normalizes different plan formats with a read-only scout and never rewrites your planning documents.
+
+## Worktree integration
+
+The setup command installs [`merge-worktree`](https://github.com/legout/skills/tree/main/skills/merge-worktree). Use `/skill:merge-worktree` to integrate a registered worktree locally or through an automatically merged GitHub pull request. Local mode validates on an isolated integration branch before moving the target. Both modes default to merge commits, run project checks, regenerate conflicted lockfiles with their package manager, attempt intent-preserving conflict resolution through Matt Pocock's `resolving-merge-conflicts` skill, and verify the pushed target. Pass `--clean-up` to remove the successfully merged source worktree automatically; otherwise the skill asks before removal. Branches are retained unless separately requested.
+
+## Releases
+
+The setup command installs [`make-release`](https://github.com/legout/skills/tree/main/skills/make-release). Use `/skill:make-release patch|minor|major` to version Python/uv or Node projects, finalize the changelog, build artifacts, commit and push, create a `v<version>` tag, and publish a GitHub Release. Add `--dry-run` for a mutation-free release plan; otherwise the exact plan requires approval before files change. Python releases may also publish to PyPI. On first use, the skill confirms the `[project].name` distribution and asks—with no default—between a GitHub workflow and local `uv publish`. GitHub publishing supports PyPI Trusted Publishing or a `PYPI_API_TOKEN` secret; local publishing uses `UV_PUBLISH_TOKEN`, not `.pypirc`.
+
+Release validation is build-focused by default. Python artifacts also receive metadata checks and a fresh-environment post-publish smoke test. Repository-mandated checks still apply, and any failed build or publishing gate stops without rewriting remote history.
 
 ## Project documentation
 

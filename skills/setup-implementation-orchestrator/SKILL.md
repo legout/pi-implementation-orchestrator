@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Setup Implementation Orchestrator
 
-The setup workflow behind the `/setup-implementation-orchestrator` prompt. The prompt loads this skill, which handles both new-project setup and reconfiguration of an existing project. Installing the package is passive: it only loads this skill. All installation and project configuration happens here, through `setup.sh`, only after the user explicitly requests setup and approves the exact changes.
+The setup workflow behind the `/setup-implementation-orchestrator` prompt. The prompt loads this skill, which handles both new-project setup and reconfiguration of an existing project. Installing the package is passive: it only loads the package's prompt and skills. All installation and project configuration happens here, through `setup.sh`, only after the user explicitly requests setup and approves the exact changes.
 
 ## Contract
 
@@ -33,7 +33,7 @@ The setup workflow behind the `/setup-implementation-orchestrator` prompt. The p
    Use `--skip-project` instead of `--project` when the user explicitly skips project setup. `--dry-run` prints every install command and the full project preview while writing nothing.
 4. **Get explicit approval.** Show the complete preview (install commands, managed block, generated docs) and ask the user to approve it. If the user declines or changes a choice, stop or rebuild the command and repeat the dry run. Never proceed to mutation without approval.
 5. **Execute.** Only after approval, run the exact same command with `--dry-run` removed and `--yes` added. Do not change any other flag between the preview and the execution.
-6. **Report.** Summarize the installed skills and Pi packages, and the project files written (`AGENTS.md`/`CLAUDE.md` managed block, `docs/agents/issue-tracker.md`, `docs/agents/domain.md`). If anything failed, report the exact error and the state actually written. For future changes, invoke this same skill again; it is the only project setup/reconfiguration entrypoint.
+6. **Report.** Summarize the installed skills (including `orchestrate-implementation`, `merge-worktree`, `make-release`, and `resolving-merge-conflicts`) and Pi packages, and the project files written (`AGENTS.md`/`CLAUDE.md` managed block, `docs/agents/issue-tracker.md`, `docs/agents/domain.md`). If anything failed, report the exact error and the state actually written. For future changes, invoke this same skill again; it is the only project setup/reconfiguration entrypoint.
 
 ## Reminders
 

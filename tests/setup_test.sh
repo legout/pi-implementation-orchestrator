@@ -48,7 +48,7 @@ test_matt_profile() {
   stub_commands
   "$ROOT/setup.sh" --planning matt --skip-project --yes
   assert_contains "$TEST_CALLS" "mattpocock/skills"
-  for skill in setup-matt-pocock-skills grilling domain-modeling grill-with-docs to-spec to-tickets tdd; do
+  for skill in setup-matt-pocock-skills grilling domain-modeling grill-with-docs to-spec to-tickets tdd resolving-merge-conflicts; do
     assert_contains "$TEST_CALLS" "--skill $skill"
   done
   assert_not_contains "$TEST_CALLS" "--skill implement"
@@ -65,6 +65,7 @@ test_superpowers_profile() {
   assert_contains "$TEST_CALLS" "--skill writing-plans"
   assert_contains "$TEST_CALLS" "mattpocock/skills"
   assert_contains "$TEST_CALLS" "--skill tdd"
+  assert_contains "$TEST_CALLS" "--skill resolving-merge-conflicts"
   assert_not_contains "$TEST_CALLS" "subagent-driven-development"
   assert_not_contains "$TEST_CALLS" "executing-plans"
   assert_not_contains "$TEST_CALLS" "requesting-code-review"
@@ -127,6 +128,9 @@ test_installs_pi_packages_and_repo_skill() {
   assert_contains "$TEST_CALLS" "pi install npm:pi-subagents"
   assert_contains "$TEST_CALLS" "pi install npm:pi-intercom"
   assert_contains "$TEST_CALLS" "--skill orchestrate-implementation"
+  assert_contains "$TEST_CALLS" "legout/skills"
+  assert_contains "$TEST_CALLS" "--skill merge-worktree"
+  assert_contains "$TEST_CALLS" "--skill make-release"
   assert_contains "$TEST_CALLS" "--global --agent pi --yes --copy"
 }
 

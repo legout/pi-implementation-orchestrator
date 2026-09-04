@@ -37,7 +37,7 @@ run() {
 
 SUPERPOWERS_SKILLS=(brainstorming writing-plans)
 MATT_PLANNING_SKILLS=(setup-matt-pocock-skills grilling domain-modeling grill-with-docs to-spec to-tickets)
-TDD_SKILL=tdd
+MATT_REQUIRED_SKILLS=(tdd resolving-merge-conflicts)
 
 parse_args() {
   while [ $# -gt 0 ]; do
@@ -241,16 +241,21 @@ install_skills() {
   if [ "$PLANNING" = matt ] || [ "$PLANNING" = both ]; then
     local args=(npx skills add mattpocock/skills)
     local s
-    for s in "${MATT_PLANNING_SKILLS[@]}"; do args+=(--skill "$s"); done
-    args+=(--skill "$TDD_SKILL" --global --agent pi --yes --copy)
+    for s in "${MATT_PLANNING_SKILLS[@]}" "${MATT_REQUIRED_SKILLS[@]}"; do args+=(--skill "$s"); done
+    args+=(--global --agent pi --yes --copy)
     run "${args[@]}"
   else
-    run npx skills add mattpocock/skills --skill "$TDD_SKILL" --global --agent pi --yes --copy
+    local args=(npx skills add mattpocock/skills)
+    local s
+    for s in "${MATT_REQUIRED_SKILLS[@]}"; do args+=(--skill "$s"); done
+    args+=(--global --agent pi --yes --copy)
+    run "${args[@]}"
   fi
 
   run pi install npm:pi-subagents
   run pi install npm:pi-intercom
   run npx skills add "$ROOT" --skill orchestrate-implementation --global --agent pi --yes --copy
+  run npx skills add legout/skills --skill merge-worktree --skill make-release --global --agent pi --yes --copy
 }
 
 render_workflow_block() {

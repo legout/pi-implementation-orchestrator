@@ -69,7 +69,7 @@ Direct setup remains available from a checkout:
 ./setup.sh --planning both --project /path/to/repo --dry-run
 ```
 
-Project choices can be made non-interactively with `--instruction-file auto|AGENTS.md|CLAUDE.md`, `--tracker auto|github|local|other`, `--tracker-description TEXT` (required for `other`), and `--domain-layout auto|single|multi`. The script installs the repository's `orchestrate-implementation` skill globally for Pi and ensures `npm:pi-subagents` and `npm:pi-intercom` are installed through Pi.
+Project choices can be made non-interactively with `--instruction-file auto|AGENTS.md|CLAUDE.md`, `--tracker auto|github|local|other`, `--tracker-description TEXT` (required for `other`), and `--domain-layout auto|single|multi`. The script installs this repository's `orchestrate-implementation` skill plus `merge-worktree` and `make-release` from `legout/skills` globally for Pi, installs Matt Pocock's `resolving-merge-conflicts` dependency, and ensures `npm:pi-subagents` and `npm:pi-intercom` are installed through Pi.
 
 ## Selected Upstream Skills
 
@@ -93,12 +93,13 @@ Install only:
 - `to-spec`
 - `to-tickets`
 - `tdd`
+- `resolving-merge-conflicts`
 
 Do not install Matt's `implement` or `code-review` skills. Workers use TDD for `new-test` tasks; the orchestrator supplies independent reviewers.
 
 ### Both profile
 
-Install the union of the two selected profiles without duplicates. TDD remains required for `new-test` tasks.
+Install the union of the two selected profiles without duplicates. TDD remains required for `new-test` tasks. Install `resolving-merge-conflicts` for every profile because `merge-worktree` uses it when integration conflicts occur.
 
 ## Upstream Installation
 
@@ -122,10 +123,23 @@ npx skills add mattpocock/skills \
   --skill to-spec \
   --skill to-tickets \
   --skill tdd \
+  --skill resolving-merge-conflicts \
   --global --agent pi --yes
 ```
 
 The setup script reports installed, skipped, and already-present components. It does not authenticate GitHub, overwrite modified skills silently, or install unrelated upstream skills.
+
+## Worktree Integration
+
+The externally maintained [`merge-worktree`](https://github.com/legout/skills/tree/main/skills/merge-worktree) skill integrates a registered source worktree either locally or through GitHub. Local mode first merges and validates on an isolated temporary integration branch, then fast-forwards the unchanged target to the verified merge commit. Both modes default to merge commits, validate before and after integration, push and verify the target, and never force-push. PR mode uses the `github` skill, waits for required checks, and merges automatically without bypassing branch protection. Conflicts load Matt Pocock's `resolving-merge-conflicts` skill and are resolved from source intent before checks resume.
+
+Cleanup is a post-success operation. `--clean-up` removes and prunes the source worktree automatically; without the flag the skill asks. It never removes a dirty or unmerged worktree and does not delete branches unless separately requested.
+
+## Release Publishing
+
+The externally maintained [`make-release`](https://github.com/legout/skills/tree/main/skills/make-release) skill supports explicit patch, minor, and major releases for Python/uv and Node packages. It previews the complete release plan and requires approval before the first mutation (`--dry-run` stops at the preview). It updates the canonical manifest and lockfile, verifies the finalized changelog against actual commits, performs build-focused validation, creates `chore(release): <version>`, pushes the default branch, creates and verifies an immutable `v<version>` tag, and publishes a GitHub Release.
+
+Python releases optionally publish to PyPI. The first publishing run confirms `[project].name` and requires an explicit choice between a GitHub workflow and local `uv publish`. GitHub publishing supports either Trusted Publishing with `id-token: write` or a `PYPI_API_TOKEN` repository secret. Local publishing uses a securely supplied `UV_PUBLISH_TOKEN`; `.pypirc` is not created because uv does not consume it. Python artifacts receive metadata validation before publication and a fresh-environment consumer smoke check afterward. Failed remote steps are reported as partial state and never repaired by rewriting history.
 
 ## Single Setup Prompt and Skill for New and Existing Projects
 
