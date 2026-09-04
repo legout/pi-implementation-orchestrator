@@ -34,7 +34,7 @@ run() {
   else "$@"; fi
 }
 
-LEGOUT_SKILLS=(shape-design write-implementation-plan prototype-question verification-before-completion systematic-debugging orchestrate-implementation merge-worktree make-release)
+LEGOUT_SKILLS=(research shape-design grilling domain-modeling write-implementation-plan prototype-question verification-before-completion systematic-debugging orchestrate-implementation merge-worktree make-release)
 
 parse_args() {
   while [ $# -gt 0 ]; do

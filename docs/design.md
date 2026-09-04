@@ -72,7 +72,10 @@ Project choices can be made non-interactively with `--instruction-file auto|AGEN
 
 Install exactly this set from `legout/skills`; no other upstream skill repositories:
 
-- `shape-design` — idea shaping and design approval (consolidates Superpowers brainstorming and Matt's grilling/domain-modeling/to-spec workflows).
+- `research` — pre-planning investigation against primary sources, captured as Markdown in the repository.
+- `shape-design` — idea shaping and design approval (combines Superpowers brainstorming with selected grilling/domain-modeling techniques; covers Matt's to-spec via its architectural path).
+- `grilling` — explicit stress-tests of plans, decisions, and ideas (combines Matt's grilling/grill-me/grill-with-docs); `shape-design` invokes it only on explicit request.
+- `domain-modeling` — CONTEXT.md glossary and ADR recording with file-format references; `shape-design` invokes it when the glossary changes or an ADR is recorded.
 - `write-implementation-plan` — executable implementation plans (consolidates Superpowers writing-plans and Matt's to-tickets decomposition).
 - `prototype-question` — disposable spikes; `shape-design` hands feasibility questions to it.
 - `verification-before-completion` — evidence-before-claims discipline for workers.

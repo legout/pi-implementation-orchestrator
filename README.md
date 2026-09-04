@@ -56,7 +56,10 @@ For a pinned tag or commit, append `@<ref>` to the Git source. A direct alternat
 
 | Skill | Role | Consolidates / replaces |
 |---|---|---|
-| `shape-design` | idea shaping and design approval | Superpowers `brainstorming`, Matt's `grilling`, `domain-modeling`, `to-spec` |
+| `research` | pre-planning investigation against primary sources, findings filed as Markdown | Matt's `research` |
+| `shape-design` | idea shaping and design approval | Superpowers `brainstorming`, Matt's `to-spec`; delegates stress-tests to `grilling` and glossary/ADR work to `domain-modeling` |
+| `grilling` | explicit stress-testing of plans, decisions, ideas | Matt's `grilling`, `grill-me`, `grill-with-docs` |
+| `domain-modeling` | CONTEXT.md glossary and ADR workflows | Matt's `domain-modeling` (full workflow, with format references) |
 | `write-implementation-plan` | executable implementation plans | Superpowers `writing-plans`, Matt's `to-tickets` |
 | `prototype-question` | disposable feasibility spikes | hands off from `shape-design`'s Spike path |
 | `verification-before-completion` | evidence-before-claims discipline | Superpowers `verification-before-completion` |

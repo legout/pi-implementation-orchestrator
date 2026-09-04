@@ -48,7 +48,7 @@ test_legout_stack() {
   stub_commands
   "$ROOT/setup.sh" --skip-project --yes
   assert_contains "$TEST_CALLS" "npx skills add legout/skills"
-  for skill in shape-design write-implementation-plan prototype-question verification-before-completion systematic-debugging orchestrate-implementation merge-worktree make-release; do
+  for skill in research shape-design grilling domain-modeling write-implementation-plan prototype-question verification-before-completion systematic-debugging orchestrate-implementation merge-worktree make-release; do
     assert_contains "$TEST_CALLS" "--skill $skill"
   done
   assert_not_contains "$TEST_CALLS" "mattpocock/skills"
