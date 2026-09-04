@@ -2,7 +2,7 @@
 
 ## Goal
 
-Publish a reusable Pi implementation-orchestration skill with a safe installer that supports selected Superpowers and Matt Pocock planning workflows, workers with per-task test obligations, native Pi subagents, optional persistent intercom peers, and interactive project setup.
+Publish a safe Pi installer and setup prompt for implementation-orchestration skills maintained in `legout/skills`, with selected Superpowers and Matt Pocock planning workflows, workers with per-task test obligations, native Pi subagents, optional persistent intercom peers, and interactive project setup.
 
 ## Repository
 
@@ -14,9 +14,9 @@ Publish a reusable Pi implementation-orchestration skill with a safe installer t
 
 ## Architecture
 
-The repository owns the native Pi manifest, orchestration and setup skills, installer, tests, and documentation. It does not vendor upstream planning skills.
+The repository owns the native Pi manifest, setup prompt, installer, tests, and documentation. Runtime skills are maintained in `legout/skills`; upstream planning skills are not vendored.
 
-Native package installation is passive: Pi loads the declared `skills/` and `prompts/` resources from `package.json` and does not execute `setup.sh`. Project configuration and dependency installation happen only after an explicit `/setup-implementation-orchestrator` prompt invocation (or direct `setup.sh` use) and user approval.
+Native package installation is passive: Pi loads the declared `prompts/` resource from `package.json` and does not execute `setup.sh`. Project configuration and dependency installation happen only after an explicit `/setup-implementation-orchestrator` prompt invocation (or direct `setup.sh` use) and user approval.
 
 ```text
 planning skills
@@ -40,10 +40,6 @@ pi-implementation-orchestrator/
 ├── package.json                 # native Pi package manifest
 ├── setup.sh                     # explicit dependency/project setup
 ├── prompts/setup-implementation-orchestrator.md
-├── skills/orchestrate-implementation/
-│   ├── SKILL.md
-│   └── evals/
-├── skills/setup-implementation-orchestrator/SKILL.md
 ├── tests/setup_test.sh
 └── docs/design.md
 ```
@@ -56,9 +52,9 @@ Install the repository as a native Git-backed Pi package:
 pi install git:github.com/legout/pi-implementation-orchestrator
 ```
 
-The manifest declares `./skills` and `./prompts`. This install is passive and must not execute setup, install upstream skills or npm packages, or create files in a target project. `pi update git:github.com/legout/pi-implementation-orchestrator` updates it and `pi remove git:github.com/legout/pi-implementation-orchestrator` removes it. Append `@<tag-or-commit>` to pin a Git ref.
+The manifest declares `./prompts`. This install is passive and must not execute setup, install skills or npm packages, or create files in a target project. `pi update git:github.com/legout/pi-implementation-orchestrator` updates it and `pi remove git:github.com/legout/pi-implementation-orchestrator` removes it. Append `@<tag-or-commit>` to pin a Git ref.
 
-After installation, invoke `/setup-implementation-orchestrator`. That prompt loads the setup skill, which resolves the package-local `../../setup.sh`, asks only unresolved choices, runs one dry-run preview, obtains explicit approval, and invokes the same command once with `--yes` to mutate state. It never edits projects itself.
+After installation, invoke `/setup-implementation-orchestrator`. That prompt locates the package's `setup.sh`, asks only unresolved choices, runs one dry-run preview, obtains explicit approval, and invokes the same command once with `--yes` to mutate state. It never edits projects itself.
 
 Direct setup remains available from a checkout:
 
@@ -69,7 +65,7 @@ Direct setup remains available from a checkout:
 ./setup.sh --planning both --project /path/to/repo --dry-run
 ```
 
-Project choices can be made non-interactively with `--instruction-file auto|AGENTS.md|CLAUDE.md`, `--tracker auto|github|local|other`, `--tracker-description TEXT` (required for `other`), and `--domain-layout auto|single|multi`. The script installs this repository's `orchestrate-implementation` skill plus `merge-worktree` and `make-release` from `legout/skills` globally for Pi, installs Matt Pocock's `resolving-merge-conflicts` dependency, and ensures `npm:pi-subagents` and `npm:pi-intercom` are installed through Pi.
+Project choices can be made non-interactively with `--instruction-file auto|AGENTS.md|CLAUDE.md`, `--tracker auto|github|local|other`, `--tracker-description TEXT` (required for `other`), and `--domain-layout auto|single|multi`. The script installs `orchestrate-implementation`, `merge-worktree`, and `make-release` from `legout/skills` globally for Pi, installs Matt Pocock's `resolving-merge-conflicts` dependency, and ensures `npm:pi-subagents` and `npm:pi-intercom` are installed through Pi.
 
 ## Selected Upstream Skills
 
@@ -80,7 +76,7 @@ Install only:
 - `brainstorming`
 - `writing-plans`
 
-Do not install Superpowers execution, review, branch-finishing, or worktree orchestration skills. The repository's orchestrator owns those responsibilities.
+Do not install Superpowers execution, review, branch-finishing, or worktree orchestration skills. `orchestrate-implementation` owns those responsibilities.
 
 ### Matt profile
 
@@ -141,9 +137,9 @@ The externally maintained [`make-release`](https://github.com/legout/skills/tree
 
 Python releases optionally publish to PyPI. The first publishing run confirms `[project].name` and requires an explicit choice between a GitHub workflow and local `uv publish`. GitHub publishing supports either Trusted Publishing with `id-token: write` or a `PYPI_API_TOKEN` repository secret. Local publishing uses a securely supplied `UV_PUBLISH_TOKEN`; `.pypirc` is not created because uv does not consume it. Python artifacts receive metadata validation before publication and a fresh-environment consumer smoke check afterward. Failed remote steps are reported as partial state and never repaired by rewriting history.
 
-## Single Setup Prompt and Skill for New and Existing Projects
+## Single Setup Prompt for New and Existing Projects
 
-`prompts/setup-implementation-orchestrator.md` is the user-facing command. Its `skill` frontmatter loads `skills/setup-implementation-orchestrator/SKILL.md`, the one trigger-only (`disable-model-invocation: true`) setup workflow for both new-project setup and existing-project reconfiguration. It accepts optional profile and project arguments; missing inputs are requested rather than guessed. For a supplied project it inspects existing instruction files, GitHub remotes, and monorepo signals, then turns the resulting answers into explicit setup flags. The dry-run output is shown verbatim for approval before any mutation. Setup is always delegated to `setup.sh`, so direct and prompt-driven setup share validation, rendering, idempotence, and safety behavior. Re-run the same prompt to modify an existing project's orchestrator configuration.
+`prompts/setup-implementation-orchestrator.md` is the user-facing command for both new-project setup and existing-project reconfiguration. It accepts optional profile and project arguments; missing inputs are requested rather than guessed. For a supplied project it inspects existing instruction files, GitHub remotes, and monorepo signals, then turns the resulting answers into explicit setup flags. The dry-run output is shown verbatim for approval before any mutation. Setup is always delegated to `setup.sh`, so direct and prompt-driven setup share validation, rendering, idempotence, and safety behavior. Re-run the same prompt to modify an existing project's orchestrator configuration.
 
 When `--project` is supplied, setup asks only unresolved project questions:
 
@@ -207,20 +203,21 @@ Use dependency-free shell tests with temporary HOME and project directories. Stu
 
 Verify:
 
-1. `package.json` parses and declares the expected Pi skills and setup prompt;
-2. setup-skill frontmatter is trigger-only and points to the package-local script;
+1. `package.json` parses and declares only the setup prompt;
+2. the setup prompt requires a dry-run and approval before `--yes`;
 3. each planning profile invokes only its selected upstream skills;
-4. `tdd` is installed for Matt and both profiles;
-5. excluded implementation/review skills never appear;
-6. explicit project-choice flags bypass prompts and validate values;
-7. dry-run performs no package or project writes;
-8. interactive choices generate the intended managed block and docs;
-9. reruns are idempotent;
-10. ambiguous managed blocks fail safely;
-11. existing instructions outside the managed block remain unchanged; and
-12. `bash -n` succeeds for scripts.
+4. all runtime skills are installed from `legout/skills`;
+5. `tdd` is installed for Matt and both profiles;
+6. excluded implementation/review skills never appear;
+7. explicit project-choice flags bypass prompts and validate values;
+8. dry-run performs no package or project writes;
+9. interactive choices generate the intended managed block and docs;
+10. reruns are idempotent;
+11. ambiguous managed blocks fail safely;
+12. existing instructions outside the managed block remain unchanged; and
+13. `bash -n` succeeds for scripts.
 
-In addition to the shell suite, validate the packaged skills with the repository's skill validator, parse `package.json` with Node, run `git diff --check`, and install the package in an isolated temporary `PI_CODING_AGENT_DIR`. The isolated install must list the package while leaving a separate target project unchanged; installation itself must not invoke `setup.sh`.
+In addition to the shell suite, parse `package.json` with Node, run `git diff --check`, and install the package in an isolated temporary `PI_CODING_AGENT_DIR`. Runtime skill contract tests belong in `legout/skills`. The isolated install must list the package while leaving a separate target project unchanged; installation itself must not invoke `setup.sh`.
 
 GitHub Actions runs the shell tests on pushes and pull requests.
 

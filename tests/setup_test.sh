@@ -121,17 +121,14 @@ test_rejects_bad_args() {
   fi
 }
 
-test_installs_pi_packages_and_repo_skill() {
+test_installs_pi_packages_and_external_skills() {
   new_case
   stub_commands
   "$ROOT/setup.sh" --planning matt --skip-project --yes
   assert_contains "$TEST_CALLS" "pi install npm:pi-subagents"
   assert_contains "$TEST_CALLS" "pi install npm:pi-intercom"
-  assert_contains "$TEST_CALLS" "--skill orchestrate-implementation"
-  assert_contains "$TEST_CALLS" "legout/skills"
-  assert_contains "$TEST_CALLS" "--skill merge-worktree"
-  assert_contains "$TEST_CALLS" "--skill make-release"
-  assert_contains "$TEST_CALLS" "--global --agent pi --yes --copy"
+  assert_contains "$TEST_CALLS" "npx skills add legout/skills --skill orchestrate-implementation --skill merge-worktree --skill make-release --global --agent pi --yes --copy"
+  assert_not_contains "$TEST_CALLS" "skills add $ROOT"
 }
 
 test_dry_run_writes_nothing() {
@@ -271,12 +268,6 @@ BLOCK
 }
 
 test_adaptive_review_and_test_policy() {
-  local skill="$ROOT/skills/orchestrate-implementation/SKILL.md"
-  for term in new-test existing-check no-new-test adaptive lastReviewedSha; do
-    assert_contains "$skill" "$term"
-  done
-  assert_contains "$skill" '## Test obligations'
-  assert_contains "$skill" '## Review policy'
   assert_contains "$ROOT/README.md" 'Focused TDD is required only for `new-test` work'
   assert_contains "$ROOT/README.md" 'low-risk changes may be batch-reviewed'
   assert_contains "$ROOT/README.md" 'high-risk changes are reviewed immediately'
@@ -296,15 +287,6 @@ test_missing_project_dir_fails() {
   fi
 }
 
-test_skill_recovery_contract() {
-  local skill="$ROOT/skills/orchestrate-implementation/SKILL.md"
-  assert_contains "$skill" "when its managed worktree still exists and the child is resumable"
-  assert_contains "$skill" "fresh fix worker in a new managed worktree from the exact original base"
-  assert_contains "$skill" "apply the durable prior handoff patch"
-  assert_contains "$skill" "durable handoff patch paths"
-  assert_contains "$ROOT/README.md" "durable handoff patch paths"
-}
-
 test_pi_package_manifest() {
   [ -n "$NODE" ] || {
     echo "node not available"
@@ -315,44 +297,19 @@ test_pi_package_manifest() {
     const fail = (m) => { console.error(m); process.exit(1); };
     if (p.name !== "pi-implementation-orchestrator") fail("bad name: " + p.name);
     if (!Array.isArray(p.keywords) || !p.keywords.includes("pi-package")) fail("missing pi-package keyword");
-    if (!p.pi || !Array.isArray(p.pi.skills) || !p.pi.skills.includes("./skills")) fail("pi.skills missing ./skills");
+    if (!p.pi || Object.prototype.hasOwnProperty.call(p.pi, "skills")) fail("package must not bundle skills");
     if (!Array.isArray(p.pi.prompts) || !p.pi.prompts.includes("./prompts")) fail("p.pi.prompts missing ./prompts");
   ' "$ROOT/package.json"
-}
-
-test_setup_skill_contract() {
-  local skill="$ROOT/skills/setup-implementation-orchestrator/SKILL.md"
-  test -f "$skill" || {
-    echo "missing skill: $skill"
-    exit 1
-  }
-  local frontmatter
-  frontmatter=$(awk 'NR == 1 && $0 == "---" { started = 1; next } started && $0 == "---" { found = 1; exit } started { print } END { if (!found) exit 1 }' "$skill")
-  printf '%s\n' "$frontmatter" | grep -Fqx -- 'name: setup-implementation-orchestrator'
-  printf '%s\n' "$frontmatter" | grep -Fqx -- 'disable-model-invocation: true'
-  printf '%s\n' "$frontmatter" | grep -F -- 'description:' >/dev/null
-  assert_contains "$skill" "disable-model-invocation: true"
-  assert_contains "$skill" "../../setup.sh"
-  assert_contains "$skill" "--instruction-file"
-  assert_contains "$skill" "--tracker"
-  assert_contains "$skill" "--domain-layout"
-  assert_contains "$skill" "approval"
-  assert_contains "$skill" "new-project setup"
-  assert_contains "$skill" "reconfiguration of an existing project"
-  assert_contains "$skill" "same skill again"
-  local dry_line yes_line
-  dry_line=$(grep -n -m1 -F -- '--dry-run' "$skill" | cut -d: -f1)
-  yes_line=$(grep -n -m1 -F -- '--yes' "$skill" | cut -d: -f1)
-  if [ -z "$dry_line" ] || [ -z "$yes_line" ] || [ "$dry_line" -ge "$yes_line" ]; then
-    echo "skill must require --dry-run before the --yes mutation"
-    exit 1
-  fi
 }
 
 test_single_setup_entrypoint() {
   local prompt="$ROOT/prompts/setup-implementation-orchestrator.md"
   test -f "$prompt"
-  assert_contains "$prompt" "skill: setup-implementation-orchestrator"
+  assert_not_contains "$prompt" "skill: setup-implementation-orchestrator"
+  assert_contains "$prompt" "setup.sh"
+  assert_contains "$prompt" "--dry-run"
+  assert_contains "$prompt" "--yes"
+  assert_contains "$prompt" "legout/skills"
   assert_contains "$prompt" '$@'
   test ! -e "$ROOT/prompts/init-orchestrator-project.md"
   assert_not_contains "$ROOT/README.md" "prompts/init-orchestrator-project.md"

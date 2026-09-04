@@ -6,7 +6,6 @@
   "repository": "https://github.com/legout/pi-implementation-orchestrator",
   "keywords": ["pi-package"],
   "pi": {
-    "skills": ["./skills"],
     "prompts": ["./prompts"]
   }
 }

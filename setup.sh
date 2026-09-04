@@ -254,8 +254,7 @@ install_skills() {
 
   run pi install npm:pi-subagents
   run pi install npm:pi-intercom
-  run npx skills add "$ROOT" --skill orchestrate-implementation --global --agent pi --yes --copy
-  run npx skills add legout/skills --skill merge-worktree --skill make-release --global --agent pi --yes --copy
+  run npx skills add legout/skills --skill orchestrate-implementation --skill merge-worktree --skill make-release --global --agent pi --yes --copy
 }
 
 render_workflow_block() {
