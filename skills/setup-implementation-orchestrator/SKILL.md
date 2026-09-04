@@ -1,12 +1,12 @@
 ---
 name: setup-implementation-orchestrator
-description: Use when the user explicitly asks to install or configure pi-implementation-orchestrator (planning skills, Pi packages, and project workflow docs) after the Pi package has been installed.
+description: Use when the user explicitly asks to install or configure pi-implementation-orchestrator for a new or existing project.
 disable-model-invocation: true
 ---
 
 # Setup Implementation Orchestrator
 
-Manually invoked setup for the `pi-implementation-orchestrator` Pi package. Installing the package is passive: it only loads skills and prompts. All installation and project configuration happens here, through `setup.sh`, only after the user explicitly requests setup and approves the exact changes.
+The setup workflow behind the `/setup-implementation-orchestrator` prompt. The prompt loads this skill, which handles both new-project setup and reconfiguration of an existing project. Installing the package is passive: it only loads this skill. All installation and project configuration happens here, through `setup.sh`, only after the user explicitly requests setup and approves the exact changes.
 
 ## Contract
 
@@ -17,7 +17,7 @@ Manually invoked setup for the `pi-implementation-orchestrator` Pi package. Inst
 
 ## Steps
 
-1. **Collect inputs.** Read the user's request for the planning profile (`matt`, `superpowers`, or `both`) and the target project path (or an explicit decision to skip project setup with `--skip-project`). Ask for any that are missing; do not assume them.
+1. **Collect inputs.** Read the user's request for the planning profile (`matt`, `superpowers`, or `both`) and the target project path (or an explicit decision to skip project setup with `--skip-project`). Ask for any that are missing; do not assume them. The target may be a new project directory or an existing project that should be updated.
 2. **Resolve choices.** When a project is given, inspect it first, then ask the user only the choices that are unresolved and convert every answer into an explicit flag so `setup.sh` never prompts:
    - Instruction file: `--instruction-file AGENTS.md` or `--instruction-file CLAUDE.md`. If both files exist, ask which is authoritative; if exactly one exists, use it; if neither, ask, defaulting to `AGENTS.md`.
    - Issue tracker: `--tracker github` (GitHub Issues, default when `git remote get-url origin` points at github.com), `--tracker local` (local Markdown, default otherwise), or `--tracker other` with `--tracker-description "<one line>"` (required, non-empty).
@@ -30,10 +30,10 @@ Manually invoked setup for the `pi-implementation-orchestrator` Pi package. Inst
      [--tracker-description "<text>"] --domain-layout <single|multi> --dry-run
    ```
 
-   `--dry-run` prints every install command and the full project preview while writing nothing.
+   Use `--skip-project` instead of `--project` when the user explicitly skips project setup. `--dry-run` prints every install command and the full project preview while writing nothing.
 4. **Get explicit approval.** Show the complete preview (install commands, managed block, generated docs) and ask the user to approve it. If the user declines or changes a choice, stop or rebuild the command and repeat the dry run. Never proceed to mutation without approval.
 5. **Execute.** Only after approval, run the exact same command with `--dry-run` removed and `--yes` added. Do not change any other flag between the preview and the execution.
-6. **Report.** Summarize the installed skills and Pi packages, and the project files written (`AGENTS.md`/`CLAUDE.md` managed block, `docs/agents/issue-tracker.md`, `docs/agents/domain.md`). If anything failed, report the exact error and the state actually written.
+6. **Report.** Summarize the installed skills and Pi packages, and the project files written (`AGENTS.md`/`CLAUDE.md` managed block, `docs/agents/issue-tracker.md`, `docs/agents/domain.md`). If anything failed, report the exact error and the state actually written. For future changes, invoke this same skill again; it is the only project setup/reconfiguration entrypoint.
 
 ## Reminders
 

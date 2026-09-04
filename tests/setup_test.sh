@@ -312,7 +312,7 @@ test_pi_package_manifest() {
     if (p.name !== "pi-implementation-orchestrator") fail("bad name: " + p.name);
     if (!Array.isArray(p.keywords) || !p.keywords.includes("pi-package")) fail("missing pi-package keyword");
     if (!p.pi || !Array.isArray(p.pi.skills) || !p.pi.skills.includes("./skills")) fail("pi.skills missing ./skills");
-    if (!p.pi || !Array.isArray(p.pi.prompts) || !p.pi.prompts.includes("./prompts")) fail("pi.prompts missing ./prompts");
+    if (!Array.isArray(p.pi.prompts) || !p.pi.prompts.includes("./prompts")) fail("p.pi.prompts missing ./prompts");
   ' "$ROOT/package.json"
 }
 
@@ -333,6 +333,9 @@ test_setup_skill_contract() {
   assert_contains "$skill" "--tracker"
   assert_contains "$skill" "--domain-layout"
   assert_contains "$skill" "approval"
+  assert_contains "$skill" "new-project setup"
+  assert_contains "$skill" "reconfiguration of an existing project"
+  assert_contains "$skill" "same skill again"
   local dry_line yes_line
   dry_line=$(grep -n -m1 -F -- '--dry-run' "$skill" | cut -d: -f1)
   yes_line=$(grep -n -m1 -F -- '--yes' "$skill" | cut -d: -f1)
@@ -340,6 +343,16 @@ test_setup_skill_contract() {
     echo "skill must require --dry-run before the --yes mutation"
     exit 1
   fi
+}
+
+test_single_setup_entrypoint() {
+  local prompt="$ROOT/prompts/setup-implementation-orchestrator.md"
+  test -f "$prompt"
+  assert_contains "$prompt" "skill: setup-implementation-orchestrator"
+  assert_contains "$prompt" '$@'
+  test ! -e "$ROOT/prompts/init-orchestrator-project.md"
+  assert_not_contains "$ROOT/README.md" "prompts/init-orchestrator-project.md"
+  assert_not_contains "$ROOT/docs/design.md" "## Init Prompt"
 }
 
 test_noninteractive_project_choices() {

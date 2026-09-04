@@ -14,7 +14,7 @@ planning skills
   → separate publication authority
 ```
 
-The repository ships: `package.json` (the native Pi manifest), `setup.sh` (dependency-free installer and project initializer), the packaged `orchestrate-implementation` and `setup-implementation-orchestrator` skills, `prompts/init-orchestrator-project.md` (model-guided reconfiguration), and shell tests. `pi-subagents` owns child lifecycle (fresh contexts, managed worktrees, missions, artifacts, review, recovery); `pi-intercom` is limited to named persistent read-only peers.
+The repository ships: `package.json` (the native Pi manifest), `setup.sh` (dependency-free installer and project initializer), the packaged `orchestrate-implementation` and `setup-implementation-orchestrator` skills, the `/setup-implementation-orchestrator` prompt that loads the setup skill, and shell tests. `pi-subagents` owns child lifecycle (fresh contexts, managed worktrees, missions, artifacts, review, recovery); `pi-intercom` is limited to named persistent read-only peers.
 
 ## Prerequisites
 
@@ -31,13 +31,13 @@ Install the native Pi package (resource loading is passive):
 pi install git:github.com/legout/pi-implementation-orchestrator
 ```
 
-Then explicitly configure a project from Pi:
+Then use the setup prompt to set up a new project or update an existing one:
 
 ```text
-/skill:setup-implementation-orchestrator
+/setup-implementation-orchestrator
 ```
 
-The setup skill asks for the planning profile, project, and unresolved project choices. It previews the exact changes with `--dry-run`, obtains your explicit approval, and only then invokes `setup.sh` to install selected planning skills globally and write project documentation. Native package installation never runs setup, installs dependencies, or creates target-project files.
+The prompt loads the `setup-implementation-orchestrator` skill. That skill asks for the planning profile, project, and unresolved project choices. It previews the exact changes with `--dry-run`, obtains your explicit approval, and only then invokes `setup.sh` to install selected planning skills globally and create or update project documentation. Run the prompt again to modify an existing project's orchestrator configuration. Native package installation never runs setup, installs dependencies, or creates target-project files.
 
 To update or remove the package:
 
