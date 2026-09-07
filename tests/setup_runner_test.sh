@@ -5,9 +5,9 @@
 # inside an `if` condition, where `set -e` is ignored, so a mid-case failure
 # followed by a passing command still exited zero. This suite keeps that honest
 # by (1) mutation-probing a copied suite: a deliberately broken copy of
-# setup.sh that omits the two generated docs during interactive setup must make
-# the copied suite fail, and (2) verifying an early failing assertion followed
-# by a passing command still fails a case.
+# setup.sh that omits the three generated docs (artifact map, tracker, domain)
+# during interactive setup must make the copied suite fail, and (2) verifying
+# an early failing assertion followed by a passing command still fails a case.
 #
 # Everything runs against copies in a temporary directory with an isolated
 # HOME/TMPDIR and defensive outer pi/npx stubs, so no real installer ever runs.
@@ -105,9 +105,10 @@ $SUITE_OUT"
 }
 
 test_generated_docs_mutation_is_detected() {
-  # Mutate the copied setup.sh so the two generated docs are written only
-  # with --yes (interactive setups omit them). The copied suite must fail
-  # specifically at test_initializes_agents_docs; historically it exited zero.
+  # Mutate the copied setup.sh so the three generated docs (artifact map,
+  # tracker, domain) are written only with --yes (interactive setups omit
+  # them). The copied suite must fail specifically at
+  # test_initializes_agents_docs; historically it exited zero.
   new_run
   copy_suite "$TMP/suite"
   awk '
@@ -117,9 +118,9 @@ test_generated_docs_mutation_is_detected() {
       next
     }
     { print }
-    END { exit (mutated == 2 ? 0 : 1) }
+    END { exit (mutated == 3 ? 0 : 1) }
   ' "$ROOT/setup.sh" >"$TMP/suite/setup.sh" ||
-    fail "mutation target not found in setup.sh (expected the two install_doc lines for docs/agents)"
+    fail "mutation target not found in setup.sh (expected the three install_doc lines for docs/agents)"
   cmp -s "$ROOT/setup.sh" "$TMP/suite/setup.sh" &&
     fail "mutation did not change setup.sh"
   run_suite "$TMP/suite"

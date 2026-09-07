@@ -1,6 +1,6 @@
 # pi-implementation-orchestrator
 
-Plan features with the consolidated [`legout/skills`](https://github.com/legout/skills) planning stack, then execute the plans with isolated Pi workers, per-task test obligations, adaptive independent review, and orchestrator-owned integration.
+Plan features with the consolidated [`legout/skills`](https://github.com/legout/skills) planning stack, then execute the plans with a preconfigured `implementer`, per-task test obligations, adaptive `code-reviewer` review, and orchestrator-owned integration.
 
 ## Architecture
 
@@ -8,8 +8,9 @@ Plan features with the consolidated [`legout/skills`](https://github.com/legout/
 planning skills
   → ADRs, specifications, tickets, and plans
   → orchestrate-implementation
-  → fresh workers in managed worktrees
-  → focused validation and adaptive review
+  → preconfigured `implementer` in managed worktrees
+  → focused validation
+  → fresh `code-reviewer` review
   → orchestrator-owned integration
   → separate publication authority
 ```
@@ -64,9 +65,10 @@ For a pinned tag or commit, append `@<ref>` to the Git source. A direct alternat
 | `prototype-question` | disposable feasibility spikes | hands off from `shape-design`'s Spike path |
 | `verification-before-completion` | evidence-before-claims discipline | Superpowers `verification-before-completion` |
 | `systematic-debugging` | reproduction and root-cause method | Matt's `diagnosing-bugs`, Superpowers `systematic-debugging` |
-| `orchestrate-implementation` | worker orchestration | Superpowers worktree patterns; carries Matt's `tdd` guidance for `new-test` tasks |
+| `orchestrate-implementation` | implementer/code-reviewer orchestration | Superpowers worktree patterns; carries Matt's `tdd` guidance for `new-test` tasks |
 | `merge-worktree` | worktree integration | Superpowers `finishing-a-development-branch`; resolves conflicts inline (no `resolving-merge-conflicts` dependency) |
 | `make-release` | release publication | — |
+| `planning-contract` | shared planning artifact and handoff contract (classification defaults, capture checkpoint, approval/readiness rules) consumed by the other planning skills | — (locally authored in `legout/skills`; installed explicitly alongside its consumers) |
 
 Packages: `pi install npm:pi-subagents`, `pi install npm:pi-intercom`.
 
@@ -79,7 +81,7 @@ Additional `legout/skills` entries you can add manually: `capture-project-vision
 ## Workflows
 
 - **Planning:** `shape-design` (idea → approved design or written spec; feasibility questions hand off to `prototype-question`) → `write-implementation-plan` (spec → executable, testable plan) → `orchestrate-implementation` executes the plan.
-- **During execution:** workers apply `systematic-debugging` to failing checks and `verification-before-completion` before claiming done; the orchestrator supplies independent adaptive review.
+- **During execution:** `implementer` applies `systematic-debugging` to failing checks and `verification-before-completion` before claiming done; the orchestrator supplies independent `code-reviewer` review.
 
 ### Ticket and plan inputs
 
@@ -97,24 +99,23 @@ Release validation is build-focused by default. Python artifacts also receive me
 
 ## Project documentation
 
-`setup.sh --project` writes one managed block (between `<!-- pi-implementation-orchestrator:start/end -->` markers) into `AGENTS.md` or `CLAUDE.md` plus `docs/agents/issue-tracker.md` and `docs/agents/domain.md`. Everything outside the markers is preserved byte-for-byte. The block records the test-obligation and adaptive-review policies, source precedence, and a **Routing and authority** section (which skill resolves which kind of decision, the `supervised` default with explicit approval gates for candidate assembly/integration/publication, one writer per worktree, evidence discipline, and merge/release authority), followed by a layout-aware documentation map: single-context repositories get a canonical root `CONTEXT.md`; multi-context repositories get per-context glossaries plus an optional `CONTEXT-MAP.md` and never declare a root `CONTEXT.md` canonical. The generated block stays under roughly 500 words and links to project docs instead of duplicating skill procedures.
+`setup.sh --project` writes one managed block (between `<!-- pi-implementation-orchestrator:start/end -->` markers) into `AGENTS.md` or `CLAUDE.md` plus `docs/agents/artifacts.md`, `docs/agents/issue-tracker.md`, and `docs/agents/domain.md`. Everything outside the markers is preserved byte-for-byte. The block records the test-obligation and adaptive-review policies, scoped authority, and a **Routing and authority** section (which skill resolves which kind of decision — including loading the shared `planning-contract` skill and the `docs/agents/artifacts.md` mapping — the `supervised` default with explicit approval gates for candidate assembly/integration/publication, one writer per worktree, evidence discipline, and merge/release authority), followed by a layout-aware documentation map: single-context repositories get a canonical root `CONTEXT.md`; multi-context repositories get per-context glossaries plus an optional `CONTEXT-MAP.md` and never declare a root `CONTEXT.md` canonical. The generated block stays under roughly 500 words and links to project docs instead of duplicating skill procedures.
 
-Source precedence inside a project:
+Scoped authority inside a project: glossaries own terminology; ADRs own accepted architectural constraints; specifications own behavior; plans/tickets own execution decomposition. No scope silently overrides another — current owner decisions are authoritative but must be reconciled into the affected artifacts before dependent work proceeds. Work stops before implementation when authoritative sources conflict.
 
-```text
-current owner decision → accepted ADR → approved specification
-  → implementation plan → ticket → existing implementation
-```
+`docs/agents/artifacts.md` is the protected project artifact mapping: declarative documentation (never executable configuration) recording the default destinations — `docs/research/` for investigations/design studies/probe reports, `docs/adr/` for architectural decisions, `docs/specs/` for behavioral contracts, `docs/plans/` for execution maps, `docs/tickets/` for local work items, workflow configuration in `docs/agents/` — with links to the tracker (`docs/agents/issue-tracker.md`) and context-layout (`docs/agents/domain.md`) docs. Explicit project mappings recorded in it override the defaults. Setup never moves existing documents or fabricates glossaries/ADRs/placeholder folders to match the map and never infers a destination from a misplaced document.
 
-Work stops before implementation when authoritative sources conflict. Documentation map: `CONTEXT.md` (domain vocabulary), `docs/adr/` (decisions), `docs/agents/` (workflow configuration), `docs/specs/` or your tracker (feature behavior and acceptance), plans/tickets (execution entry points).
+Documentation map: `CONTEXT.md` (domain vocabulary), `docs/adr/` (decisions), `docs/agents/` (workflow, tracker, and artifact-map configuration), `docs/specs/` or your tracker (feature behavior and acceptance), plans/tickets (execution entry points).
 
 ## Execution modes
 
 - **`plan-only`** — normalize inputs, create manifest and task briefs, no source edits.
-- **`supervised`** (default) — run workers, validation, review and fix cycles; pause before integration/publication.
+- **`supervised`** (default) — run the implementer, validation, review and fix cycles; pause before integration/publication.
 - **`autonomous`** — same loop; cherry-pick accepted commits when clean; pause on conflicts, unresolved decisions, failed gates, push, merge, deploy, or release.
 
-## Worker and reviewer contracts
+## Implementer and code-reviewer contracts
+
+The orchestrator consumes existing Pi subagent profiles; setup does not create or override user models or agent definitions. Prefer the preconfigured `implementer` for implementation and `code-reviewer` for independent review. If either profile is unavailable, stop and get owner approval before using builtin `worker` or `reviewer`, then record the resolved names in the run manifest. Before dispatch, confirm the selected profiles with `subagent({ action: "list", capabilities: true })` and verify their tool permissions match the role.
 
 Evidence is always mandatory; a new test is not. Every task declares exactly one test obligation during preflight:
 
@@ -122,17 +123,17 @@ Evidence is always mandatory; a new test is not. Every task declares exactly one
 - **`existing-check`** — existing tests already exercise the affected behavior (e.g. a refactor inside covered seams). Add no redundant test; run and report the named focused checks.
 - **`no-new-test`** — documentation, formatting, comments, static metadata, generated artifacts, typo correction, or another change where a new test proves little (e.g. a README edit). Run the smallest meaningful lint, parse, build, diff, or manual validation.
 
-A worker may challenge its assigned obligation after inspection but must report why; it may never silently skip validation.
+An implementer may challenge its assigned obligation after inspection but must report why; it may never silently skip validation.
 
-- **Workers:** sole writer in one managed worktree; one bounded brief per worker; report commit IDs, changed files, obligation, rationale, commands, results, and residual risks. No scope expansion, no cross-lane integration, no publication.
+- **Implementer:** sole writer in one managed worktree; one bounded brief per run; report commit IDs, changed files, obligation, rationale, commands, results, and residual risks. No scope expansion, cross-lane integration, or publication.
 - **Review policy:** adaptive and orchestrator-owned — high-risk changes are reviewed immediately; low-risk changes may be batch-reviewed cumulatively from a `lastReviewedSha` boundary to the pinned tip of the reviewed branch at a wave boundary. Alternatives: `strict` (immediate task review plus final review), `wave` (review completed waves plus final review), and `final-only` (explicit opt-in for prototypes or mechanical work).
-- **Immediate-review triggers:** public API/schema/shared contract; security/auth/permissions/secrets; money/data-loss/migration; concurrency/distributed behavior; broad cross-cutting diff; weak or missing checks; worker uncertainty/scope expansion; integration conflict; a task whose contract will be consumed before the next wave review.
-- **Cumulative review:** one reviewer covers the exact branch-scoped range from `lastReviewedSha` to the pinned reviewed-branch tip; after a clean verdict the boundary advances. One batch fix worker handles the accepted finding list, then the affected range is revalidated and re-reviewed. Every pending change is reviewed before integration or publication.
-- **Independent reviewer:** fresh read-only context, reviews the exact diff range, classifies findings; the orchestrator (not workers or reviewers) owns acceptance and integration.
+- **Immediate-review triggers:** public API/schema/shared contract; security/auth/permissions/secrets; money/data-loss/migration; concurrency/distributed behavior; broad cross-cutting diff; weak or missing checks; implementer uncertainty/scope expansion; integration conflict; a task whose contract will be consumed before the next wave review.
+- **Cumulative review:** one `code-reviewer` covers the exact branch-scoped range from `lastReviewedSha` to the pinned reviewed-branch tip; after a clean verdict the boundary advances. One batch fix `implementer` handles the accepted finding list, then the affected range is revalidated and re-reviewed. Every pending change is reviewed before integration or publication.
+- **Independent code-reviewer:** fresh read-only context, reviews the exact diff range, classifies findings; the orchestrator (not implementer or code-reviewer) owns acceptance and integration.
 
 ## Herdr visibility
 
-Persistent peers (`architecture-peer`, `domain-peer`, `quality-peer`) run as explicitly named, read-only `pi-intercom` sessions in visible Herdr tabs. Native workers run headless through `pi-subagents`; optional inspector tabs attach read-only views. Peers never edit code, commit, integrate, or publish.
+Persistent peers (`architecture-peer`, `domain-peer`, `quality-peer`) run as explicitly named, read-only `pi-intercom` sessions in visible Herdr tabs. The `implementer` runs headless through `pi-subagents`; `code-reviewer` is a fresh read-only child; optional inspector tabs attach read-only views. Peers never edit code, commit, integrate, or publish.
 
 ## Operations
 
@@ -143,22 +144,22 @@ Persistent peers (`architecture-peer`, `domain-peer`, `quality-peer`) run as exp
 - **Shared preflight validation.** Inspect, dry-run, and apply all run the same checks before any install: malformed, reversed, or duplicate managed markers; instruction/output paths of the wrong kind (for example `docs` existing as a regular file); unwritable destinations; and missing `git`/`npx`/`pi`/`node` prerequisites (reported in inspect/preview, enforced on apply). All of these fail **before** any external command runs.
 - **Symlinks are refused, never followed.** A symlinked instruction file, generated doc, or symlinked ancestor directory below the canonical project root aborts setup, naming the offending path; nothing is modified, unlinked, or replaced. Resolve such links yourself outside setup. The `--project` argument itself may resolve through a symlink to its canonical root.
 - **Install-before-write ordering.** After approval, rendered outputs are staged in a unique temporary directory and external installs run **before** any project write. If an install fails, project files are untouched, the already-completed external steps are reported, and no destructive automatic uninstall is attempted. Each project output is then rendered to a same-directory temporary file and renamed into place. A write failure exits nonzero with a clear rerun instruction; earlier successful writes remain in place, and rerunning deterministically converges. Multi-file replacement and external installs are not one atomic transaction, and crash/power-loss durability is not promised.
-- **Generated docs are managed.** `docs/agents/issue-tracker.md` and `docs/agents/domain.md` are owned only when they match generated/configuration-only content: unchanged choices regenerate them byte-identically, while custom content is never silently overwritten. Interactive setup asks; `--replace-custom` records the explicit replacement choice for preview/apply; `--yes` refuses without that flag. Setup never claims arbitrary other `docs/agents/` files.
+- **Generated docs are managed.** `docs/agents/artifacts.md`, `docs/agents/issue-tracker.md`, and `docs/agents/domain.md` are owned only when they match generated/configuration-only content: unchanged choices regenerate them byte-identically, while custom content (including configured custom artifact mappings) is never silently overwritten. Interactive setup asks; `--replace-custom` records the explicit replacement choice for preview/apply; `--yes` refuses without that flag. Setup never claims arbitrary other `docs/agents/` files.
 
 ### Day-to-day operations
 
 - **Inspect:** `./setup.sh --project /path --inspect` — read-only report as described above.
 - **Dry run:** `./setup.sh --project /path --dry-run` prints every command and the complete resulting files; nothing is executed or written. The setup prompt always performs this preview before asking for approval.
-- **Update / rerun:** rerunning setup replaces the one managed block and regenerates the two managed docs idempotently; surrounding content survives. After a partial write failure, rerun setup to converge. Ambiguous or malformed markers abort safely before any install.
-- **Worker fixes and recovery:** review evidence is branch-scoped — a verdict applies to an exact reviewed range from a pinned boundary to the reviewed branch tip, never to a moved parent `HEAD`. When a worker worktree or branch no longer exists, the durable handoff patch is replayed in a parent-owned review worktree at the pinned lane base to reconstruct and review the exact tree; fixes start from the same base with the prior patch applied; accepted lanes are assembled into an explicitly registered candidate branch that is handed to `merge-worktree` for integration. The recovery boundary is durable patch paths and pinned refs, not child-session or worktree survival. The detailed lifecycle is owned by `orchestrate-implementation` in [`legout/skills`](https://github.com/legout/skills); the hardening of that lifecycle (pinned bases, reconstructed review, registered candidates) is specified in this repository's current plans and is not yet released in the skills repository.
-- **Safe uninstall:** remove the Pi package with `pi remove git:github.com/legout/pi-implementation-orchestrator`; delete the managed block between the `pi-implementation-orchestrator:start/end` markers from your instruction file (keep everything else in that file); remove `docs/agents/issue-tracker.md` and `docs/agents/domain.md` **only after confirming they still match the generated content and contain none of your edits** — keep any other documents under `docs/agents/`, modified files, and anything you own. Shared skills and Pi packages are unaffected by removing this package; remove them separately only if you want to (for example `npx skills remove <skill> --global --agent pi` for globally installed skills).
+- **Update / rerun:** rerunning setup replaces the one managed block and regenerates the three managed docs (artifact map, tracker, domain) idempotently; surrounding content survives. After a partial write failure, rerun setup to converge. Ambiguous or malformed markers abort safely before any install.
+- **Implementer fixes and recovery:** review evidence is branch-scoped — a verdict applies to an exact reviewed range from a pinned boundary to the reviewed branch tip, never to a moved parent `HEAD`. When an implementation worktree or branch no longer exists, the durable handoff patch is replayed in a parent-owned review worktree at the pinned lane base to reconstruct and review the exact tree; fixes start from the same base with the prior patch applied; accepted lanes are assembled into an explicitly registered candidate branch that is handed to `merge-worktree` for integration. The recovery boundary is durable patch paths and pinned refs, not child-session or worktree survival. The detailed lifecycle is owned by `orchestrate-implementation` in [`legout/skills`](https://github.com/legout/skills); the hardening of that lifecycle (pinned bases, reconstructed review, registered candidates) is specified in this repository's current plans and is not yet released in the skills repository.
+- **Safe uninstall:** remove the Pi package with `pi remove git:github.com/legout/pi-implementation-orchestrator`; delete the managed block between the `pi-implementation-orchestrator:start/end` markers from your instruction file (keep everything else in that file); remove `docs/agents/artifacts.md`, `docs/agents/issue-tracker.md`, and `docs/agents/domain.md` **only after confirming they still match the generated content and contain none of your edits** — keep any other documents under `docs/agents/`, modified files, and anything you own. Shared skills and Pi packages are unaffected by removing this package; remove them separately only if you want to (for example `npx skills remove <skill> --global --agent pi` for globally installed skills).
 - **Troubleshooting:** run with `--inspect` and `--dry-run` first; a refusal naming a symlink or a malformed marker is a preflight stop, not a failure to clean up; check `pi install` output; see [pi docs](https://github.com/earendil-works/pi-coding-agent).
 
 ### Limitations
 
 - No automatic resolution of semantic merge conflicts.
 - Setup never authenticates GitHub, pushes, merges, or deploys.
-- External installs are not reproducibly pinned: `npx skills add legout/skills` and `pi install npm:pi-*` fetch current remote state at install time. The runtime boundary described here reflects the audited `pi-subagents` 0.66.0 behavior (managed workers may lose their worktree/branch on completion); live re-verification and pinning are tracked with the [`legout/skills`](https://github.com/legout/skills) release.
+- External installs are not reproducibly pinned: `npx skills add legout/skills` and `pi install npm:pi-*` fetch current remote state at install time. The runtime boundary described here reflects the audited `pi-subagents` 0.66.0 behavior (managed implementer worktrees may be removed on completion); live re-verification and pinning are tracked with the [`legout/skills`](https://github.com/legout/skills) release.
 
 ## Tests
 

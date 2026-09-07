@@ -16,7 +16,7 @@ TEST_CALLS=
 TEST_DIR=
 START_MARKER='<!-- pi-implementation-orchestrator:start -->'
 END_MARKER='<!-- pi-implementation-orchestrator:end -->'
-SKILLS=(research shape-design grilling domain-modeling write-implementation-plan prototype-question verification-before-completion systematic-debugging orchestrate-implementation merge-worktree make-release)
+SKILLS=(research shape-design grilling domain-modeling write-implementation-plan prototype-question verification-before-completion systematic-debugging orchestrate-implementation merge-worktree make-release planning-contract)
 
 cleanup() { test -z "${TMP:-}" || rm -rf "$TMP"; }
 trap cleanup EXIT
@@ -54,6 +54,7 @@ if [ -n "${TEST_SABOTAGE:-}" ] && [ "$name" = npx ]; then
   case "$TEST_SABOTAGE" in
   make-agents-dir) rm -rf "$TEST_PROJECT/AGENTS.md"; mkdir -p "$TEST_PROJECT/AGENTS.md" ;;
   make-domain-dir) rm -rf "$TEST_PROJECT/docs/agents/domain.md"; mkdir -p "$TEST_PROJECT/docs/agents/domain.md" ;;
+  make-artifacts-dir) rm -rf "$TEST_PROJECT/docs/agents/artifacts.md"; mkdir -p "$TEST_PROJECT/docs/agents/artifacts.md" ;;
   append-agents) printf 'concurrent edit\n' >> "$TEST_PROJECT/AGENTS.md" ;;
   same-size-agents)
     cp "$TEST_PROJECT/AGENTS.md" "$TEST_DIR/agents-reference"
@@ -105,7 +106,7 @@ mode_of() {
   local m
   m=$(stat -c %a "$1" 2>/dev/null || true)
   case "$m" in
-  ''|*[!0-7]*) m=$(stat -f %Lp "$1" 2>/dev/null || true) ;;
+  '' | *[!0-7]*) m=$(stat -f %Lp "$1" 2>/dev/null || true) ;;
   esac
   printf '%s\n' "$m"
 }
@@ -179,9 +180,10 @@ test_legout_stack() {
   stub_commands
   (cd "$TMP" && "$ROOT/setup.sh" --skip-project --yes) >/dev/null 2>&1
   assert_global_calls "$TMP"
-  # exactly eleven skills, one skills-install invocation, no unrelated commands
+  # exactly twelve skills, one skills-install invocation, no unrelated commands
   assert_eq "$(grep -c 'skills add' "$TEST_CALLS" | tr -d ' ')" "1"
-  assert_eq "$(grep -o -- '--skill [a-z-]*' "$TEST_CALLS" | wc -l | tr -d ' ')" "11"
+  assert_eq "$(grep -o -- '--skill [a-z-]*' "$TEST_CALLS" | wc -l | tr -d ' ')" "12"
+  assert_contains "$TEST_CALLS" "--skill planning-contract"
   assert_not_contains "$TEST_CALLS" "mattpocock/skills"
   assert_not_contains "$TEST_CALLS" "obra/superpowers"
   assert_not_contains "$TEST_CALLS" "skills add $ROOT"
@@ -299,11 +301,13 @@ test_initializes_agents_docs() {
   assert_file "$TMP/project/AGENTS.md"
   assert_file "$TMP/project/docs/agents/issue-tracker.md"
   assert_file "$TMP/project/docs/agents/domain.md"
+  assert_file "$TMP/project/docs/agents/artifacts.md"
   assert_contains "$TMP/project/AGENTS.md" "pi-implementation-orchestrator:start"
   assert_contains "$TMP/project/AGENTS.md" "TDD"
   assert_contains "$TMP/project/AGENTS.md" "orchestrator-owned"
   assert_contains "$TMP/project/docs/agents/issue-tracker.md" "Tracker: Local Markdown."
   assert_contains "$TMP/project/docs/agents/domain.md" "Layout: single context."
+  assert_contains "$TMP/project/docs/agents/artifacts.md" "# Artifact mapping"
 }
 
 test_declined_confirmation_writes_nothing() {
@@ -345,12 +349,14 @@ test_rerun_is_idempotent() {
   cp "$TMP/project/AGENTS.md" "$TMP/agents-1"
   cp "$TMP/project/docs/agents/issue-tracker.md" "$TMP/tracker-1"
   cp "$TMP/project/docs/agents/domain.md" "$TMP/domain-1"
+  cp "$TMP/project/docs/agents/artifacts.md" "$TMP/artifacts-1"
   "$ROOT/setup.sh" --project "$TMP/project" --yes \
     --instruction-file AGENTS.md --tracker local --domain-layout single --skill-scope global \
     </dev/null >/dev/null 2>&1
   cmp -s "$TMP/agents-1" "$TMP/project/AGENTS.md" || fail "rerun changed AGENTS.md"
   cmp -s "$TMP/tracker-1" "$TMP/project/docs/agents/issue-tracker.md" || fail "rerun changed tracker doc"
   cmp -s "$TMP/domain-1" "$TMP/project/docs/agents/domain.md" || fail "rerun changed domain doc"
+  cmp -s "$TMP/artifacts-1" "$TMP/project/docs/agents/artifacts.md" || fail "rerun changed artifact-map doc"
   assert_eq "$(grep -c 'pi-implementation-orchestrator:start' "$TMP/project/AGENTS.md" | tr -d ' ')" "1"
 }
 
@@ -541,8 +547,15 @@ test_routing_authority_block() {
     </dev/null >/dev/null 2>&1
   local block="$TMP/project/AGENTS.md"
   assert_contains "$block" '### Routing and authority'
+  assert_contains "$block" 'docs/agents/artifacts.md'
+  assert_contains "$block" 'planning-contract'
+  assert_contains "$block" 'Scoped authority: glossaries own terminology'
+  assert_not_contains "$block" 'Source precedence:'
   assert_contains "$block" 'Use `shape-design` for unresolved behavior/design choices'
   assert_contains "$block" 'Default orchestrated execution to `supervised`'
+  assert_contains "$block" 'Route implementation to the preconfigured `implementer` agent and independent review to a fresh read-only `code-reviewer`'
+  assert_contains "$block" 'stop and ask the owner before using builtin `worker`/`reviewer`'
+  assert_contains "$block" 'record the approved resolved names in the run manifest'
   assert_contains "$block" 'Use `pi-subagents` for spawned-child lifecycle'
   assert_contains "$block" 'Use `systematic-debugging` for unexpected failures'
   assert_contains "$block" 'Use `merge-worktree` for target integration'
@@ -601,6 +614,7 @@ test_single_setup_entrypoint() {
   assert_contains "$prompt" "--yes"
   assert_contains "$prompt" "--replace-custom"
   assert_contains "$prompt" "legout/skills"
+  assert_contains "$prompt" "record the approved resolved names in the run manifest"
   assert_contains "$prompt" '$@'
   test ! -e "$ROOT/prompts/init-orchestrator-project.md"
   assert_not_contains "$ROOT/README.md" "prompts/init-orchestrator-project.md"
@@ -861,9 +875,29 @@ test_late_write_failure_leaves_prior_writes() {
     </dev/null 2>&1) && fail "write failure accepted"
   printf '%s\n' "$out" >"$TMP/out"
   assert_contains "$TMP/out" "Rerun setup"
+  assert_contains "$TMP/project/docs/agents/artifacts.md" "# Artifact mapping"
   assert_contains "$TMP/project/docs/agents/issue-tracker.md" "Tracker: Local Markdown."
   assert_contains "$TMP/project/docs/agents/domain.md" "Layout: single context."
   test -d "$TMP/project/AGENTS.md" || fail "foreign concurrent change was overwritten"
+}
+
+test_artifacts_map_late_write_failure() {
+  new_case
+  stub_commands
+  export TEST_SABOTAGE=make-artifacts-dir
+  export TEST_PROJECT="$TMP/project"
+  out=$("$ROOT/setup.sh" --project "$TMP/project" --yes \
+    --instruction-file AGENTS.md --tracker local --domain-layout single --skill-scope global \
+    </dev/null 2>&1) && fail "artifact-map write failure accepted"
+  printf '%s\n' "$out" >"$TMP/out"
+  assert_contains "$TMP/out" "Rerun setup"
+  assert_contains "$TMP/out" "External installs already performed"
+  assert_contains "$TMP/out" "docs/agents/artifacts.md"
+  # the map is written first: its failure leaves no later writes behind
+  assert_no_file "$TMP/project/AGENTS.md"
+  assert_no_file "$TMP/project/docs/agents/issue-tracker.md"
+  test -d "$TMP/project/docs/agents/artifacts.md" || fail "foreign concurrent change was overwritten"
+  assert_contains "$TEST_CALLS" "npx skills add legout/skills"
 }
 
 test_second_write_failure_leaves_first_write() {
@@ -876,6 +910,7 @@ test_second_write_failure_leaves_first_write() {
     </dev/null 2>&1) && fail "write failure accepted"
   printf '%s\n' "$out" >"$TMP/out"
   assert_contains "$TMP/out" "Rerun setup"
+  assert_file "$TMP/project/docs/agents/artifacts.md"
   assert_file "$TMP/project/docs/agents/issue-tracker.md"
   assert_no_file "$TMP/project/AGENTS.md"
 }
@@ -979,6 +1014,234 @@ test_custom_generated_doc_requires_decision() {
     2>&1) || fail "interactive custom-doc approval failed"
   assert_contains <(printf '%s\n' "$out") "custom content (replacement explicitly approved)"
   assert_contains "$TMP/project/docs/agents/issue-tracker.md" "Tracker: Local Markdown."
+}
+
+test_artifacts_map_creation() {
+  new_case
+  stub_commands
+  printf '1\n1\n1\ny\n' | "$ROOT/setup.sh" --project "$TMP/project" >/dev/null 2>&1
+  local map="$TMP/project/docs/agents/artifacts.md"
+  assert_file "$map"
+  assert_contains "$map" "# Artifact mapping"
+  assert_contains "$map" "declarative documentation, not executable configuration"
+  assert_contains "$map" "docs/research/:"
+  assert_contains "$map" "docs/adr/:"
+  assert_contains "$map" "docs/specs/:"
+  assert_contains "$map" "docs/plans/:"
+  assert_contains "$map" "docs/tickets/:"
+  assert_contains "$map" "docs/agents/issue-tracker.md"
+  assert_contains "$map" "docs/agents/domain.md"
+  assert_contains "$map" "planning-contract"
+  # the map and the contract are linked from the managed root block
+  assert_contains "$TMP/project/AGENTS.md" "docs/agents/artifacts.md"
+  assert_contains "$TMP/project/AGENTS.md" "planning-contract"
+}
+
+test_legacy_project_receives_map() {
+  new_case
+  stub_commands
+  # a project configured by an older setup: managed block and the full set of
+  # generated docs exist, but no docs/agents/artifacts.md yet
+  mkdir -p "$TMP/seed"
+  "$ROOT/setup.sh" --project "$TMP/seed" --yes \
+    --instruction-file AGENTS.md --tracker local --domain-layout single --skill-scope global \
+    </dev/null >/dev/null 2>&1
+  mkdir -p "$TMP/project/docs/agents" "$TMP/project/docs/specs" "$TMP/project/docs/adr"
+  {
+    printf '# Project rules\n\n'
+    printf '%s\n' "$START_MARKER"
+    printf 'old managed line\n'
+    printf '%s\n' "$END_MARKER"
+    printf '\nNever commit secrets.\n'
+  } >"$TMP/project/AGENTS.md"
+  cp "$TMP/seed/docs/agents/issue-tracker.md" "$TMP/project/docs/agents/issue-tracker.md"
+  cp "$TMP/seed/docs/agents/domain.md" "$TMP/project/docs/agents/domain.md"
+  printf '# Feasibility report\n\nEvidence from a probe.\n' >"$TMP/project/docs/specs/feasibility.md"
+  printf '# Existing decision\n' >"$TMP/project/docs/adr/0001-existing.md"
+  local spec_before adr_before tracker_before domain_before
+  spec_before=$(shasum <"$TMP/project/docs/specs/feasibility.md")
+  adr_before=$(shasum <"$TMP/project/docs/adr/0001-existing.md")
+  tracker_before=$(shasum <"$TMP/project/docs/agents/issue-tracker.md")
+  domain_before=$(shasum <"$TMP/project/docs/agents/domain.md")
+  "$ROOT/setup.sh" --project "$TMP/project" --yes \
+    --instruction-file AGENTS.md --tracker local --domain-layout single --skill-scope global \
+    </dev/null >/dev/null 2>&1
+  # the map is added; existing documents are not moved, rewritten, or fabricated
+  assert_file "$TMP/project/docs/agents/artifacts.md"
+  assert_eq "$(shasum <"$TMP/project/docs/specs/feasibility.md")" "$spec_before"
+  assert_eq "$(shasum <"$TMP/project/docs/adr/0001-existing.md")" "$adr_before"
+  assert_eq "$(shasum <"$TMP/project/docs/agents/issue-tracker.md")" "$tracker_before"
+  assert_eq "$(shasum <"$TMP/project/docs/agents/domain.md")" "$domain_before"
+  assert_no_file "$TMP/project/CONTEXT.md"
+  assert_no_file "$TMP/project/docs/research"
+  assert_not_contains "$TMP/project/docs/agents/artifacts.md" "feasibility.md"
+  # surrounding instruction-file bytes survive the block refresh
+  assert_contains "$TMP/project/AGENTS.md" "# Project rules"
+  assert_contains "$TMP/project/AGENTS.md" "Never commit secrets."
+}
+
+test_configured_artifacts_map_reused() {
+  new_case
+  stub_commands
+  # generate the canonical map once, then treat it as the configured mapping
+  mkdir -p "$TMP/seed" "$TMP/project/docs/agents"
+  "$ROOT/setup.sh" --project "$TMP/seed" --yes \
+    --instruction-file AGENTS.md --tracker local --domain-layout single --skill-scope global \
+    </dev/null >/dev/null 2>&1
+  cp "$TMP/seed/docs/agents/artifacts.md" "$TMP/generated-map"
+
+  # a fully generated map is owned: rerun regenerates it without questions
+  cp "$TMP/generated-map" "$TMP/project/docs/agents/artifacts.md"
+  out=$("$ROOT/setup.sh" --project "$TMP/project" --yes \
+    --instruction-file AGENTS.md --tracker local --domain-layout single --skill-scope global \
+    </dev/null 2>&1) || fail "configured map required a replace decision"
+  printf '%s\n' "$out" >"$TMP/out"
+  assert_not_contains "$TMP/out" "custom content"
+  cmp -s "$TMP/generated-map" "$TMP/project/docs/agents/artifacts.md" ||
+    fail "regenerated map differs from the configured map"
+
+  # the recognized mapping header alone is also owned configuration
+  new_case
+  stub_commands
+  mkdir -p "$TMP/seed" "$TMP/project/docs/agents"
+  "$ROOT/setup.sh" --project "$TMP/seed" --yes \
+    --instruction-file AGENTS.md --tracker local --domain-layout single --skill-scope global \
+    </dev/null >/dev/null 2>&1
+  head -n 3 "$TMP/seed/docs/agents/artifacts.md" >"$TMP/project/docs/agents/artifacts.md"
+  "$ROOT/setup.sh" --project "$TMP/project" --yes \
+    --instruction-file AGENTS.md --tracker local --domain-layout single --skill-scope global \
+    </dev/null >/dev/null 2>&1
+  cmp -s "$TMP/seed/docs/agents/artifacts.md" "$TMP/project/docs/agents/artifacts.md" ||
+    fail "header-only map was not regenerated deterministically"
+}
+
+test_custom_artifacts_map_requires_decision() {
+  # --yes cannot decide to replace custom mapping content
+  new_case
+  stub_commands
+  mkdir -p "$TMP/project/docs/agents"
+  printf '# Our artifact routing\n\n- docs/notes/: everything\n' >"$TMP/project/docs/agents/artifacts.md"
+  out=$("$ROOT/setup.sh" --project "$TMP/project" --yes \
+    --instruction-file AGENTS.md --tracker local --domain-layout single --skill-scope global \
+    </dev/null 2>&1) && fail "--yes replaced custom artifact map"
+  printf '%s\n' "$out" >"$TMP/out"
+  assert_contains "$TMP/out" "custom content"
+  assert_contains "$TMP/out" "artifacts.md"
+  assert_contains "$TMP/project/docs/agents/artifacts.md" "Our artifact routing"
+  assert_calls_empty
+
+  # dry-run makes the replacement gate visible without prompting
+  new_case
+  stub_commands
+  mkdir -p "$TMP/project/docs/agents"
+  printf '# Our artifact routing\n' >"$TMP/project/docs/agents/artifacts.md"
+  out=$("$ROOT/setup.sh" --project "$TMP/project" --dry-run \
+    --instruction-file AGENTS.md --tracker local --domain-layout single --skill-scope global \
+    </dev/null 2>&1) || fail "dry-run asked for a custom-map answer"
+  assert_contains <(printf '%s\n' "$out") "docs/agents/artifacts.md (custom content (requires --replace-custom))"
+  assert_calls_empty
+
+  # the generated mapping header plus custom entries stays custom
+  new_case
+  stub_commands
+  mkdir -p "$TMP/project/docs/agents"
+  {
+    printf '# Artifact mapping\n\n'
+    printf 'Mapping: generated defaults. This file is declarative documentation, not executable configuration.\n\n'
+    printf '%s\n' '- docs/notes/: everything'
+  } >"$TMP/project/docs/agents/artifacts.md"
+  out=$("$ROOT/setup.sh" --project "$TMP/project" --yes \
+    --instruction-file AGENTS.md --tracker local --domain-layout single --skill-scope global \
+    </dev/null 2>&1) && fail "--yes replaced configured custom mapping entries"
+  assert_contains "$TMP/project/docs/agents/artifacts.md" "docs/notes/"
+  assert_calls_empty
+
+  # --replace-custom records the explicit replacement decision
+  new_case
+  stub_commands
+  mkdir -p "$TMP/project/docs/agents"
+  printf '# Our artifact routing\n' >"$TMP/project/docs/agents/artifacts.md"
+  "$ROOT/setup.sh" --project "$TMP/project" --replace-custom --yes \
+    --instruction-file AGENTS.md --tracker local --domain-layout single --skill-scope global \
+    </dev/null >/dev/null 2>&1
+  assert_contains "$TMP/project/docs/agents/artifacts.md" "# Artifact mapping"
+
+  # interactive decline leaves everything untouched
+  new_case
+  stub_commands
+  mkdir -p "$TMP/project/docs/agents"
+  printf '# Our artifact routing\n' >"$TMP/project/docs/agents/artifacts.md"
+  printf 'n\n' | "$ROOT/setup.sh" --project "$TMP/project" \
+    --instruction-file AGENTS.md --tracker local --domain-layout single --skill-scope global \
+    >/dev/null 2>&1
+  assert_contains "$TMP/project/docs/agents/artifacts.md" "Our artifact routing"
+  assert_calls_empty
+  assert_no_file "$TMP/project/AGENTS.md"
+
+  # interactive approval replaces it (custom decision, then final approval)
+  new_case
+  stub_commands
+  mkdir -p "$TMP/project/docs/agents"
+  printf '# Our artifact routing\n' >"$TMP/project/docs/agents/artifacts.md"
+  out=$(printf 'y\ny\n' | "$ROOT/setup.sh" --project "$TMP/project" \
+    --instruction-file AGENTS.md --tracker local --domain-layout single --skill-scope global \
+    2>&1) || fail "interactive custom-map approval failed"
+  assert_contains <(printf '%s\n' "$out") "custom content (replacement explicitly approved)"
+  assert_contains "$TMP/project/docs/agents/artifacts.md" "# Artifact mapping"
+}
+
+test_artifacts_map_purity() {
+  new_case
+  stub_commands
+  out=$("$ROOT/setup.sh" --inspect --project "$TMP/project" \
+    --instruction-file AGENTS.md --tracker local --domain-layout single --skill-scope global \
+    </dev/null 2>&1) || fail "inspect failed on a project without a map"
+  printf '%s\n' "$out" >"$TMP/out"
+  assert_contains "$TMP/out" "docs/agents/artifacts.md: owned/generated configuration"
+  assert_no_file "$TMP/project/docs"
+  assert_no_file "$TMP/project/AGENTS.md"
+  assert_calls_empty
+
+  out=$("$ROOT/setup.sh" --project "$TMP/project" --dry-run \
+    --instruction-file AGENTS.md --tracker local --domain-layout single --skill-scope global \
+    </dev/null 2>&1) || fail "dry-run failed on a project without a map"
+  printf '%s\n' "$out" >"$TMP/out"
+  assert_contains "$TMP/out" "docs/agents/artifacts.md (new file)"
+  assert_contains "$TMP/out" "--- docs/agents/artifacts.md"
+  assert_no_file "$TMP/project/docs"
+  assert_no_file "$TMP/project/AGENTS.md"
+  assert_calls_empty
+}
+
+test_artifacts_map_symlink_refused() {
+  new_case
+  stub_commands
+  mkdir -p "$TMP/project/docs/agents"
+  ln -s "$TMP/project/elsewhere.md" "$TMP/project/docs/agents/artifacts.md"
+  out=$("$ROOT/setup.sh" --project "$TMP/project" --yes \
+    --instruction-file AGENTS.md --tracker local --domain-layout single --skill-scope global \
+    </dev/null 2>&1) && fail "artifact-map symlink accepted"
+  printf '%s\n' "$out" >"$TMP/out"
+  assert_contains "$TMP/out" "refusing to operate through the symlink"
+  assert_contains "$TMP/out" "artifacts.md"
+  test -L "$TMP/project/docs/agents/artifacts.md" || fail "symlink replaced"
+  assert_calls_empty
+  assert_no_file "$TMP/project/AGENTS.md"
+}
+
+test_artifacts_map_wrong_kind_refused() {
+  new_case
+  stub_commands
+  mkdir -p "$TMP/project/docs/agents/artifacts.md"
+  out=$("$ROOT/setup.sh" --project "$TMP/project" --yes \
+    --instruction-file AGENTS.md --tracker local --domain-layout single --skill-scope global \
+    </dev/null 2>&1) && fail "directory at artifact-map path accepted"
+  printf '%s\n' "$out" >"$TMP/out"
+  assert_contains "$TMP/out" "not a regular file"
+  assert_contains "$TMP/out" "artifacts.md"
+  assert_calls_empty
+  test -d "$TMP/project/docs/agents/artifacts.md"
+  assert_no_file "$TMP/project/AGENTS.md"
 }
 
 test_existing_tracker_doc_suppresses_question() {

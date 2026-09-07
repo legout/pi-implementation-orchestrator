@@ -5,7 +5,7 @@ ROOT=$(cd "$(dirname "$0")" && pwd)
 START_MARKER='<!-- pi-implementation-orchestrator:start -->'
 END_MARKER='<!-- pi-implementation-orchestrator:end -->'
 
-LEGOUT_SKILLS=(research shape-design grilling domain-modeling write-implementation-plan prototype-question verification-before-completion systematic-debugging orchestrate-implementation merge-worktree make-release)
+LEGOUT_SKILLS=(research shape-design grilling domain-modeling write-implementation-plan prototype-question verification-before-completion systematic-debugging orchestrate-implementation merge-worktree make-release planning-contract)
 
 MODE=apply
 INSPECT=false
@@ -14,6 +14,7 @@ ASSUME_YES=false
 REPLACE_CUSTOM=false
 TRACKER_CUSTOM_APPROVED=false
 DOMAIN_CUSTOM_APPROVED=false
+ARTIFACTS_CUSTOM_APPROVED=false
 SKIP_PROJECT=false
 PROJECT=
 PROJECT_ARG=
@@ -719,6 +720,7 @@ validate_project_outputs() {
   validate_managed_block "$PROJECT/$INSTRUCTION_FILE"
   validate_dir_target "docs" "docs directory"
   validate_dir_target "docs/agents" "docs/agents directory"
+  validate_output_file "docs/agents/artifacts.md" "generated artifact-map doc"
   validate_output_file "docs/agents/issue-tracker.md" "generated tracker doc"
   validate_output_file "docs/agents/domain.md" "generated domain doc"
 }
@@ -726,6 +728,10 @@ validate_project_outputs() {
 resolve_custom_doc_decisions() {
   [ -n "$PROJECT" ] || return 0
   local doc
+  doc="$PROJECT/docs/agents/artifacts.md"
+  if artifacts_doc_requires_replace "$doc" && ! "$REPLACE_CUSTOM"; then
+    custom_doc_decision "$doc"
+  fi
   doc="$PROJECT/docs/agents/issue-tracker.md"
   if tracker_doc_requires_replace "$doc" && ! "$REPLACE_CUSTOM"; then
     custom_doc_decision "$doc"
@@ -749,11 +755,11 @@ custom_doc_decision() {
   read -r answer || die "standard input closed while deciding about $doc; aborting with no changes"
   case "$answer" in
   y | Y | yes | YES)
-    if [ "$doc" = "$PROJECT/docs/agents/issue-tracker.md" ]; then
-      TRACKER_CUSTOM_APPROVED=true
-    else
-      DOMAIN_CUSTOM_APPROVED=true
-    fi
+    case "$doc" in
+    "$PROJECT/docs/agents/issue-tracker.md") TRACKER_CUSTOM_APPROVED=true ;;
+    "$PROJECT/docs/agents/domain.md") DOMAIN_CUSTOM_APPROVED=true ;;
+    *) ARTIFACTS_CUSTOM_APPROVED=true ;;
+    esac
     ;;
   *)
     echo "Aborted; nothing was installed or written."
@@ -814,15 +820,16 @@ render_workflow_block() {
 - Every task declares one test obligation: `new-test`, `existing-check`, or `no-new-test`; focused TDD is required only for `new-test` work.
 - Review is adaptive and orchestrator-owned: high-risk or dependency-defining changes are reviewed immediately; low-risk changes may be reviewed cumulatively at a wave boundary.
 - Plans and tickets reference exact feature sources; this file defines stable repository-wide scope.
-- Source precedence: current owner decision → accepted ADR → approved specification → implementation plan → ticket → existing implementation.
+- Scoped authority: glossaries own terminology; ADRs own accepted architectural constraints; specifications own behavior; plans/tickets own execution decomposition. No scope silently overrides another; reconcile owner decisions into the affected artifacts before dependent work proceeds.
 - Stop before implementation when authoritative sources conflict.
 
 ### Routing and authority
 
-- Read `docs/agents/issue-tracker.md` and `docs/agents/domain.md` when their scope applies; preserve established project conventions.
+- Read `docs/agents/artifacts.md` for the project artifact mapping and load the `planning-contract` skill for artifact classification and planning handoffs; read `docs/agents/issue-tracker.md` and `docs/agents/domain.md` when their scope applies. Preserve established project conventions.
 - Use `shape-design` for unresolved behavior/design choices, `write-implementation-plan` for approved multi-step work, and `orchestrate-implementation` to execute approved work. Do not turn a trivial edit into a planning exercise.
-- Default orchestrated execution to `supervised`: workers may implement and validate, but candidate assembly, integration, and publication retain explicit approval gates.
-- Keep one writer per worktree. Use `pi-subagents` for spawned-child lifecycle; named persistent `pi-intercom` peers are read-only advisors, not workers or schedulers.
+- Default orchestrated execution to `supervised`: the `implementer` may implement and validate, but candidate assembly, integration, and publication retain explicit approval gates.
+- Route implementation to the preconfigured `implementer` agent and independent review to a fresh read-only `code-reviewer`; if either is unavailable, stop and ask the owner before using builtin `worker`/`reviewer`, and record the approved resolved names in the run manifest.
+- Keep one writer per worktree. Use `pi-subagents` for spawned-child lifecycle; named persistent `pi-intercom` peers are read-only advisors, not implementation or review agents.
 - Use `systematic-debugging` for unexpected failures and `verification-before-completion` before success claims; match evidence to the exact change and report skipped checks.
 - Use `merge-worktree` for target integration and `make-release` for releases. Local integration does not authorize pushing; opening a PR does not authorize merging; release or publication requires its own approved plan.
 - Stop on conflicting authoritative sources, unclear ownership, failed required gates, or missing required tooling. Never silently switch execution modes to bypass a blocker.
@@ -836,6 +843,7 @@ EOF
 - Per-context `CONTEXT.md` files: canonical vocabulary for their package or context. No single root `CONTEXT.md` is canonical here.
 - `CONTEXT-MAP.md`, when present: the map of real contexts and their glossaries; read it before recording vocabulary or new contexts.
 - `docs/adr/`: accepted architecture decisions.
+- `docs/agents/`: workflow, tracker, and artifact-map configuration.
 - `docs/specs/` or the configured tracker: feature behavior and acceptance.
 - implementation plans/tickets: execution entry points and explicit source references.
 EOF
@@ -843,7 +851,7 @@ EOF
     cat <<'EOF'
 - `CONTEXT.md`: canonical domain vocabulary for the whole repository.
 - `docs/adr/`: accepted architecture decisions.
-- `docs/agents/`: workflow and tracker configuration.
+- `docs/agents/`: workflow, tracker, and artifact-map configuration.
 - `docs/specs/` or the configured tracker: feature behavior and acceptance.
 - implementation plans/tickets: execution entry points and explicit source references.
 EOF
@@ -888,6 +896,26 @@ EOF
   fi
 }
 
+render_artifacts_doc() {
+  cat <<'EOF'
+# Artifact mapping
+
+Mapping: generated defaults. This file is declarative documentation, not executable configuration.
+
+- docs/research/: investigations, design studies, and probe reports.
+- docs/adr/: accepted architectural decisions.
+- docs/specs/: behavioral contracts.
+- docs/plans/: execution maps.
+- docs/tickets/: local work items.
+- docs/agents/: workflow configuration, including the tracker (docs/agents/issue-tracker.md) and the context layout (docs/agents/domain.md).
+- CONTEXT.md: canonical domain vocabulary per the context layout declared in docs/agents/domain.md.
+
+Explicit project mappings recorded here override these defaults. Planning artifact and handoff semantics are owned by the `planning-contract` skill from `legout/skills`.
+
+Setup never moves existing documents and never fabricates glossaries, ADRs, or placeholder folders to match this map. A misplaced document is evidence of misclassification, not a mapping rule; resolve conflicts explicitly with the owner.
+EOF
+}
+
 tracker_doc_is_owned() {
   local doc="$1"
   render_tracker_doc | cmp -s - "$doc" && return 0
@@ -929,6 +957,24 @@ domain_doc_requires_replace() {
   local doc="$1"
   [ -f "$doc" ] || return 1
   domain_doc_is_owned "$doc" && return 1
+  return 0
+}
+
+artifacts_doc_is_owned() {
+  local doc="$1"
+  render_artifacts_doc | cmp -s - "$doc" && return 0
+  {
+    echo "# Artifact mapping"
+    echo
+    echo "Mapping: generated defaults. This file is declarative documentation, not executable configuration."
+  } | cmp -s - "$doc" && return 0
+  return 1
+}
+
+artifacts_doc_requires_replace() {
+  local doc="$1"
+  [ -f "$doc" ] || return 1
+  artifacts_doc_is_owned "$doc" && return 1
   return 0
 }
 
@@ -987,10 +1033,10 @@ file_mode() {
   # GNU stat accepts -f as a filesystem query and still exits successfully.
   m=$(stat -c %a "$1" 2>/dev/null || true)
   case "$m" in
-  ''|*[!0-7]*) m=$(stat -f %Lp "$1" 2>/dev/null || true) ;;
+  '' | *[!0-7]*) m=$(stat -f %Lp "$1" 2>/dev/null || true) ;;
   esac
   case "$m" in
-  ''|*[!0-7]*) m=644 ;;
+  '' | *[!0-7]*) m=644 ;;
   esac
   echo "$m"
 }
@@ -1003,16 +1049,17 @@ stat_sig() {
   local s
   s=$(stat -c '%s:%Y' "$1" 2>/dev/null || true)
   case "$s" in
-  ''|*[!0-9:]*) s=$(stat -f '%z:%m' "$1" 2>/dev/null || true) ;;
+  '' | *[!0-9:]*) s=$(stat -f '%z:%m' "$1" 2>/dev/null || true) ;;
   esac
   case "$s" in
-  ''|*[!0-9:]*) s= ;;
+  '' | *[!0-9:]*) s= ;;
   esac
   echo "$s:$(file_mode "$1")"
 }
 
 print_preview() {
   local inst_doc="$PROJECT/$INSTRUCTION_FILE"
+  local artifacts_doc="$PROJECT/docs/agents/artifacts.md"
   local tracker_doc="$PROJECT/docs/agents/issue-tracker.md"
   local domain_doc="$PROJECT/docs/agents/domain.md"
   echo "=== Preview ==="
@@ -1034,6 +1081,8 @@ print_preview() {
       echo "--- $INSTRUCTION_FILE (new file) ---"
     fi
     render_instruction_file
+    echo "--- docs/agents/artifacts.md ($(preview_doc_action "$artifacts_doc")) ---"
+    render_artifacts_doc
     echo "--- docs/agents/issue-tracker.md ($(preview_doc_action "$tracker_doc")) ---"
     render_tracker_doc
     echo "--- docs/agents/domain.md ($(preview_doc_action "$domain_doc")) ---"
@@ -1044,7 +1093,14 @@ print_preview() {
 
 preview_doc_action() {
   local approved=false
-  if [ "$1" = "$PROJECT/docs/agents/issue-tracker.md" ] && tracker_doc_requires_replace "$1"; then
+  if [ "$1" = "$PROJECT/docs/agents/artifacts.md" ] && artifacts_doc_requires_replace "$1"; then
+    approved="$ARTIFACTS_CUSTOM_APPROVED"
+    if "$REPLACE_CUSTOM" || "$approved"; then
+      echo "custom content (replacement explicitly approved)"
+    else
+      echo "custom content (requires --replace-custom)"
+    fi
+  elif [ "$1" = "$PROJECT/docs/agents/issue-tracker.md" ] && tracker_doc_requires_replace "$1"; then
     approved="$TRACKER_CUSTOM_APPROVED"
     if "$REPLACE_CUSTOM" || "$approved"; then
       echo "custom content (replacement explicitly approved)"
@@ -1089,6 +1145,7 @@ stage_files() {
   ORCH_WORK=$(mktemp -d "${TMPDIR:-/tmp}/pi-orchestrator-setup.XXXXXX")
   trap 'test -z "${ORCH_WORK:-}" || rm -rf "$ORCH_WORK"' EXIT
   render_instruction_file >"$ORCH_WORK/instruction"
+  render_artifacts_doc >"$ORCH_WORK/artifacts"
   render_tracker_doc >"$ORCH_WORK/tracker"
   render_domain_doc >"$ORCH_WORK/domain"
   T_REL=()
@@ -1097,11 +1154,12 @@ stage_files() {
   T_SIG=()
   T_MODE=()
   T_ACTION=()
-  prepare_target 1 docs/agents/issue-tracker.md tracker
-  prepare_target 2 docs/agents/domain.md domain
-  prepare_target 3 "$INSTRUCTION_FILE" instruction
+  prepare_target 1 docs/agents/artifacts.md artifacts
+  prepare_target 2 docs/agents/issue-tracker.md tracker
+  prepare_target 3 docs/agents/domain.md domain
+  prepare_target 4 "$INSTRUCTION_FILE" instruction
   local idx
-  for idx in 1 2 3; do
+  for idx in 1 2 3 4; do
     chmod "${T_MODE[$idx]}" "$ORCH_WORK/${T_STAGE[$idx]}" || die "failed to stage $ORCH_WORK/${T_STAGE[$idx]} (nothing has been modified)"
   done
 }
@@ -1237,9 +1295,10 @@ write_project_files() {
   refuse_symlink_ancestors docs/agents
   create_project_dir docs || handle_directory_failure "$PROJECT/docs"
   create_project_dir docs/agents || handle_directory_failure "$PROJECT/docs/agents"
-  install_doc "$PROJECT/docs/agents/issue-tracker.md" tracker 1 || handle_write_failure "$?" 1
-  install_doc "$PROJECT/docs/agents/domain.md" domain 2 || handle_write_failure "$?" 2
-  install_doc "$PROJECT/$INSTRUCTION_FILE" instruction 3 || handle_write_failure "$?" 3
+  install_doc "$PROJECT/docs/agents/artifacts.md" artifacts 1 || handle_write_failure "$?" 1
+  install_doc "$PROJECT/docs/agents/issue-tracker.md" tracker 2 || handle_write_failure "$?" 2
+  install_doc "$PROJECT/docs/agents/domain.md" domain 3 || handle_write_failure "$?" 3
+  install_doc "$PROJECT/$INSTRUCTION_FILE" instruction 4 || handle_write_failure "$?" 4
 }
 
 exec_install() {
@@ -1300,9 +1359,10 @@ apply_phase() {
   echo "Setup complete ($SKILL_SCOPE skill scope)."
   if [ -n "$PROJECT" ]; then
     echo "Project files in $PROJECT:"
-    echo "  $INSTRUCTION_FILE: managed block ${T_ACTION[3]:-written}"
-    echo "  docs/agents/issue-tracker.md: ${T_ACTION[1]:-written}"
-    echo "  docs/agents/domain.md: ${T_ACTION[2]:-written}"
+    echo "  $INSTRUCTION_FILE: managed block ${T_ACTION[4]:-written}"
+    echo "  docs/agents/artifacts.md: ${T_ACTION[1]:-written}"
+    echo "  docs/agents/issue-tracker.md: ${T_ACTION[2]:-written}"
+    echo "  docs/agents/domain.md: ${T_ACTION[3]:-written}"
   fi
 }
 
@@ -1334,7 +1394,7 @@ suggested_command() {
     else
       cmd="$cmd --domain-layout single"
     fi
-    if tracker_doc_requires_replace "$PROJECT/docs/agents/issue-tracker.md" || domain_doc_requires_replace "$PROJECT/docs/agents/domain.md"; then
+    if tracker_doc_requires_replace "$PROJECT/docs/agents/issue-tracker.md" || domain_doc_requires_replace "$PROJECT/docs/agents/domain.md" || artifacts_doc_requires_replace "$PROJECT/docs/agents/artifacts.md"; then
       cmd="$cmd --replace-custom"
     fi
   fi
@@ -1374,6 +1434,11 @@ inspect_report() {
   echo "  skill-scope: ${SKILL_SCOPE:-?} [$SCOPE_STATUS] $SCOPE_NOTE"
   if [ -n "$PROJECT" ]; then
     echo "Generated docs:"
+    if artifacts_doc_requires_replace "$PROJECT/docs/agents/artifacts.md"; then
+      echo "  docs/agents/artifacts.md: UNRESOLVED unrecognized custom content; pass --replace-custom only after explicit approval"
+    else
+      echo "  docs/agents/artifacts.md: owned/generated configuration"
+    fi
     if tracker_doc_requires_replace "$PROJECT/docs/agents/issue-tracker.md"; then
       echo "  docs/agents/issue-tracker.md: UNRESOLVED unrecognized custom content; pass --replace-custom only after explicit approval"
     else
