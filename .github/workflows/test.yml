@@ -2,8 +2,24 @@ name: test
 on: [push, pull_request]
 jobs:
   setup:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - run: bash -n setup.sh tests/setup_test.sh
+      # `bash -n a.sh b.sh` parses only the first script; check each file.
+      - run: |
+          for f in setup.sh tests/setup_test.sh tests/setup_runner_test.sh; do
+            bash -n "$f"
+          done
       - run: bash tests/setup_test.sh
+      - run: bash tests/setup_runner_test.sh
+      - name: package manifest check
+        run: |
+          node -e '
+            const p = require("./package.json");
+            if (!p.pi.prompts.includes("./prompts")) process.exit(1);
+            if (p.pi.skills) process.exit(1);
+          '
+      - run: git diff --check

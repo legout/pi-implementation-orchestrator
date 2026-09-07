@@ -4,11 +4,14 @@ description: Set up or update pi-implementation-orchestrator for a new or existi
 
 # Setup Implementation Orchestrator
 
-Run the package's deterministic setup workflow for this request: `$@`.
+Deterministic setup for this request: `$@`. All inspection, validation, and mutation happen in the package's `setup.sh`; never edit project files or install skills yourself.
 
-1. Locate this package's `setup.sh`. Use `./setup.sh` when this is the package checkout; otherwise inspect `pi list` to find the installed `legout/pi-implementation-orchestrator` package. If it cannot be located, ask for the checkout/package path instead of guessing.
-2. Read `setup.sh --help`. Resolve the target project path, or an explicit choice to skip project configuration. Ask for missing values.
-3. For a project, inspect existing `AGENTS.md`/`CLAUDE.md`, its origin remote, and monorepo signals. Ask only unresolved skill-scope, instruction-file, tracker, and domain-layout choices.
-4. Pass every choice as an explicit flag and run exactly one preview with `--dry-run`. Show the complete install commands and project-file preview.
-5. Require explicit approval. Then run the identical command with `--dry-run` removed and `--yes` added. Never edit project files or install skills outside `setup.sh`.
-6. Report installed skills/packages and written project files. The setup script installs runtime skills from `legout/skills` with `npx skills`.
+1. **Locate the package once.** Use `./setup.sh` when this checkout *is* the package; otherwise run `pi list` once and use the installed `legout/pi-implementation-orchestrator` copy's `setup.sh`. Never run an unrelated project's `setup.sh` just because it exists. If it cannot be located or is ambiguous, ask for the checkout/package path.
+2. **Inspect — only when inputs are not fully explicit.** If the request already supplies the target project (or an explicit `--skip-project`), every choice flag (`--instruction-file`, `--tracker`, `--domain-layout`, `--skill-scope`), and an explicit custom-content decision (`--replace-custom` when replacement is intended), skip this step. Otherwise ask for the missing target project first, then run `setup.sh --inspect` once with the known flags. It is read-only, needs no answers, and reports detected configuration, unresolved choices, custom generated-doc content, and hazards. Collect every unresolved choice — including whether to replace custom generated docs — and ask the user **all of them in one grouped round**. If replacement is approved, include `--replace-custom` in both later commands; if it is declined, stop rather than attempt an apply that would refuse the custom content. Do not guess through contradictory files, do not read project files one by one, and do not open help, planning skills, or subagents for setup discovery.
+3. **Preview.** Run `setup.sh --dry-run` once with fully explicit flags (including `--replace-custom` when approved) and show its complete output verbatim (install commands plus the exact resulting project files).
+4. **Approve.** Request explicit approval for that exact preview. Any changed choice restarts at step 3 with a new preview.
+5. **Apply.** Run the identical command with `--dry-run` removed and `--yes` added, then report what actually happened (skills/packages installed, files written). The script installs the selected runtime skills from `legout/skills` with `npx skills` and the `pi-subagents`/`pi-intercom` packages; nothing is installed or written before approval. Project outputs are written afterward; if a write fails, report the nonzero failure and tell the user to rerun setup to converge.
+
+**Bound after package/target resolution:** at most three script executions (inspect, preview, apply), one grouped choice round, and one approval. Invalid input, validation hazards (for example symlinked instruction files or malformed managed markers), and failures are legitimate exceptions — report them instead of improvising.
+
+Native package loading stays passive: installing this package never runs setup or creates project files; setup runs only through this prompt or direct `setup.sh` use.
