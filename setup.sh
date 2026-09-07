@@ -984,11 +984,15 @@ render_instruction_file() {
 
 file_mode() {
   local m
-  m=$(stat -f %Lp "$1" 2>/dev/null || true)
-  if [ -z "$m" ]; then
-    m=$(stat -c %a "$1" 2>/dev/null || true)
-  fi
-  echo "${m:-644}"
+  # GNU stat accepts -f as a filesystem query and still exits successfully.
+  m=$(stat -c %a "$1" 2>/dev/null || true)
+  case "$m" in
+  ''|*[!0-7]*) m=$(stat -f %Lp "$1" 2>/dev/null || true) ;;
+  esac
+  case "$m" in
+  ''|*[!0-7]*) m=644 ;;
+  esac
+  echo "$m"
 }
 
 same_file_contents() {
@@ -997,10 +1001,13 @@ same_file_contents() {
 
 stat_sig() {
   local s
-  s=$(stat -f '%z:%m' "$1" 2>/dev/null || true)
-  if [ -z "$s" ]; then
-    s=$(stat -c '%s:%Y' "$1" 2>/dev/null || true)
-  fi
+  s=$(stat -c '%s:%Y' "$1" 2>/dev/null || true)
+  case "$s" in
+  ''|*[!0-9:]*) s=$(stat -f '%z:%m' "$1" 2>/dev/null || true) ;;
+  esac
+  case "$s" in
+  ''|*[!0-9:]*) s= ;;
+  esac
   echo "$s:$(file_mode "$1")"
 }
 

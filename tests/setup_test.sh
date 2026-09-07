@@ -81,12 +81,34 @@ STUB
   export TEST_DIR="$TMP"
 }
 
+gnu_stat_stub() {
+  cat >"$TMP/bin/stat" <<'STUB'
+#!/usr/bin/env bash
+case "$1:$2" in
+-c:%a) printf '640\n' ;;
+-c:%s:%Y) printf '1:1\n' ;;
+-f:%Lp|-f:%z:%m) printf 'File: fake\nFilesystem: fake\n' ;;
+*) exit 1 ;;
+esac
+STUB
+  chmod +x "$TMP/bin/stat"
+}
+
 assert_contains() { grep -F -- "$2" "$1" >/dev/null || fail "missing in $(basename "$1"): $2"; }
 assert_not_contains() { ! grep -F -- "$2" "$1" >/dev/null || fail "unexpected in $(basename "$1"): $2"; }
 assert_eq() { test "$1" = "$2" || fail "expected [$2], got [$1]"; }
 assert_file() { test -f "$1" || fail "expected file: $1"; }
 assert_no_file() { test ! -e "$1" || fail "unexpected path: $1"; }
 assert_calls_empty() { test ! -s "$TEST_CALLS" || fail "expected zero external calls, got: $(cat "$TEST_CALLS")"; }
+
+mode_of() {
+  local m
+  m=$(stat -c %a "$1" 2>/dev/null || true)
+  case "$m" in
+  ''|*[!0-7]*) m=$(stat -f %Lp "$1" 2>/dev/null || true) ;;
+  esac
+  printf '%s\n' "$m"
+}
 
 assert_global_calls() {
   # exact external-call contract for global scope, run from cwd "$1"
@@ -491,12 +513,13 @@ test_replacement_preserves_bytes() {
 test_replacement_preserves_file_mode() {
   new_case
   stub_commands
+  gnu_stat_stub
   printf 'old\n' >"$TMP/project/AGENTS.md"
   chmod 640 "$TMP/project/AGENTS.md"
   "$ROOT/setup.sh" --project "$TMP/project" --yes \
     --instruction-file AGENTS.md --tracker local --domain-layout single --skill-scope global \
     </dev/null >/dev/null 2>&1
-  assert_eq "$(stat -f %Lp "$TMP/project/AGENTS.md" 2>/dev/null || stat -c %a "$TMP/project/AGENTS.md")" "640"
+  assert_eq "$(mode_of "$TMP/project/AGENTS.md")" "640"
 }
 
 test_adaptive_review_and_test_policy() {
