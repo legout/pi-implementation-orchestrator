@@ -821,8 +821,9 @@ render_workflow_block() {
 
 - Read `docs/agents/issue-tracker.md` and `docs/agents/domain.md` when their scope applies; preserve established project conventions.
 - Use `shape-design` for unresolved behavior/design choices, `write-implementation-plan` for approved multi-step work, and `orchestrate-implementation` to execute approved work. Do not turn a trivial edit into a planning exercise.
-- Default orchestrated execution to `supervised`: workers may implement and validate, but candidate assembly, integration, and publication retain explicit approval gates.
-- Keep one writer per worktree. Use `pi-subagents` for spawned-child lifecycle; named persistent `pi-intercom` peers are read-only advisors, not workers or schedulers.
+- Default orchestrated execution to `supervised`: the `implementer` may implement and validate, but candidate assembly, integration, and publication retain explicit approval gates.
+- Route implementation to the preconfigured `implementer` agent and independent review to a fresh read-only `code-reviewer`; if either is unavailable, stop and ask the owner before using builtin `worker`/`reviewer`, and record the approved resolved names in the run manifest.
+- Keep one writer per worktree. Use `pi-subagents` for spawned-child lifecycle; named persistent `pi-intercom` peers are read-only advisors, not implementation or review agents.
 - Use `systematic-debugging` for unexpected failures and `verification-before-completion` before success claims; match evidence to the exact change and report skipped checks.
 - Use `merge-worktree` for target integration and `make-release` for releases. Local integration does not authorize pushing; opening a PR does not authorize merging; release or publication requires its own approved plan.
 - Stop on conflicting authoritative sources, unclear ownership, failed required gates, or missing required tooling. Never silently switch execution modes to bypass a blocker.
@@ -987,10 +988,10 @@ file_mode() {
   # GNU stat accepts -f as a filesystem query and still exits successfully.
   m=$(stat -c %a "$1" 2>/dev/null || true)
   case "$m" in
-  ''|*[!0-7]*) m=$(stat -f %Lp "$1" 2>/dev/null || true) ;;
+  '' | *[!0-7]*) m=$(stat -f %Lp "$1" 2>/dev/null || true) ;;
   esac
   case "$m" in
-  ''|*[!0-7]*) m=644 ;;
+  '' | *[!0-7]*) m=644 ;;
   esac
   echo "$m"
 }
@@ -1003,10 +1004,10 @@ stat_sig() {
   local s
   s=$(stat -c '%s:%Y' "$1" 2>/dev/null || true)
   case "$s" in
-  ''|*[!0-9:]*) s=$(stat -f '%z:%m' "$1" 2>/dev/null || true) ;;
+  '' | *[!0-9:]*) s=$(stat -f '%z:%m' "$1" 2>/dev/null || true) ;;
   esac
   case "$s" in
-  ''|*[!0-9:]*) s= ;;
+  '' | *[!0-9:]*) s= ;;
   esac
   echo "$s:$(file_mode "$1")"
 }

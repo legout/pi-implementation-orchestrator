@@ -105,7 +105,7 @@ mode_of() {
   local m
   m=$(stat -c %a "$1" 2>/dev/null || true)
   case "$m" in
-  ''|*[!0-7]*) m=$(stat -f %Lp "$1" 2>/dev/null || true) ;;
+  '' | *[!0-7]*) m=$(stat -f %Lp "$1" 2>/dev/null || true) ;;
   esac
   printf '%s\n' "$m"
 }
@@ -543,6 +543,9 @@ test_routing_authority_block() {
   assert_contains "$block" '### Routing and authority'
   assert_contains "$block" 'Use `shape-design` for unresolved behavior/design choices'
   assert_contains "$block" 'Default orchestrated execution to `supervised`'
+  assert_contains "$block" 'Route implementation to the preconfigured `implementer` agent and independent review to a fresh read-only `code-reviewer`'
+  assert_contains "$block" 'stop and ask the owner before using builtin `worker`/`reviewer`'
+  assert_contains "$block" 'record the approved resolved names in the run manifest'
   assert_contains "$block" 'Use `pi-subagents` for spawned-child lifecycle'
   assert_contains "$block" 'Use `systematic-debugging` for unexpected failures'
   assert_contains "$block" 'Use `merge-worktree` for target integration'
@@ -601,6 +604,7 @@ test_single_setup_entrypoint() {
   assert_contains "$prompt" "--yes"
   assert_contains "$prompt" "--replace-custom"
   assert_contains "$prompt" "legout/skills"
+  assert_contains "$prompt" "record the approved resolved names in the run manifest"
   assert_contains "$prompt" '$@'
   test ! -e "$ROOT/prompts/init-orchestrator-project.md"
   assert_not_contains "$ROOT/README.md" "prompts/init-orchestrator-project.md"

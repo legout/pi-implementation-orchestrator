@@ -1,7 +1,7 @@
 {
   "name": "pi-implementation-orchestrator",
   "version": "0.1.0",
-  "description": "Plan with selected skills and execute with isolated Pi workers and adaptive review.",
+  "description": "Plan with selected skills and execute with a preconfigured implementer and code-reviewer.",
   "license": "MIT",
   "repository": "https://github.com/legout/pi-implementation-orchestrator",
   "keywords": ["pi-package"],

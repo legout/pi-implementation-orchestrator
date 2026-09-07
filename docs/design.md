@@ -2,7 +2,7 @@
 
 ## Goal
 
-Publish a safe Pi installer and setup prompt for implementation-orchestration and planning skills maintained in `legout/skills`, workers with per-task test obligations, native Pi subagents, optional persistent intercom peers, and interactive project setup.
+Publish a safe Pi installer and setup prompt for implementation-orchestration and planning skills maintained in `legout/skills`, a preconfigured `implementer`/`code-reviewer` pair with per-task test obligations, native Pi subagents, optional persistent intercom peers, and interactive project setup.
 
 ## Repository
 
@@ -22,8 +22,9 @@ Native package installation is passive: Pi loads the declared `prompts/` resourc
 planning skills
   → ADRs, specifications, tickets, and plans
   → orchestrate-implementation
-  → fresh workers in managed worktrees
-  → focused validation and adaptive review
+  → preconfigured `implementer` in managed worktrees
+  → focused validation
+  → fresh `code-reviewer` review
   → orchestrator-owned integration
   → separate publication authority
 ```
@@ -84,13 +85,13 @@ Install exactly this set from `legout/skills`; no other upstream skill repositor
 - `domain-modeling` — CONTEXT.md glossary and ADR recording with file-format references; `shape-design` invokes it when the glossary changes or an ADR is recorded.
 - `write-implementation-plan` — executable implementation plans (consolidates Superpowers writing-plans and Matt's to-tickets decomposition).
 - `prototype-question` — disposable spikes; `shape-design` hands feasibility questions to it.
-- `verification-before-completion` — evidence-before-claims discipline for workers.
+- `verification-before-completion` — evidence-before-claims discipline for the implementer.
 - `systematic-debugging` — reproduction and root-cause method for failing checks.
-- `orchestrate-implementation` — worker orchestration; carries the TDD/test-seam guidance for `new-test` tasks.
+- `orchestrate-implementation` — implementer/code-reviewer orchestration; carries the TDD/test-seam guidance for `new-test` tasks.
 - `merge-worktree` — worktree integration; resolves conflicts inline from source intent.
 - `make-release` — release publication.
 
-Workers get TDD discipline through `orchestrate-implementation`; the orchestrator supplies independent reviewers. Additional `legout/skills` entries (`capture-project-vision`, `doc-coauthoring`, `simplify-code`, `review-codebase-architecture`) are available but not installed by default.
+The `implementer` gets TDD discipline through `orchestrate-implementation`; the orchestrator supplies a fresh read-only `code-reviewer`. Setup consumes these existing profiles and does not create or override their model/tool configuration. If a preferred profile is unavailable, the owner must approve a fallback to builtin `worker`/`reviewer`, and the resolved names must be recorded in the run manifest. Additional `legout/skills` entries (`capture-project-vision`, `doc-coauthoring`, `simplify-code`, `review-codebase-architecture`) are available but not installed by default.
 
 ## Upstream Installation
 
@@ -142,6 +143,7 @@ If one of `CLAUDE.md` or `AGENTS.md` already exists, update that file. If both e
 Write or update one marked workflow block that documents:
 
 - per-task test obligations (`new-test`, `existing-check`, `no-new-test`);
+- preferred preconfigured `implementer` and `code-reviewer` roles, with explicit fallback approval;
 - adaptive orchestrator-owned review;
 - routing and authority rules (which skill handles which decision, `supervised` default with explicit integration/publication gates, one writer per worktree, evidence discipline, merge/release authority);
 - a layout-aware documentation map — single-context references canonical root `CONTEXT.md`; multi-context references per-context glossaries and an optional `CONTEXT-MAP.md` and never declares a root `CONTEXT.md` canonical;
@@ -172,11 +174,11 @@ The review policy is chosen per run and defaults to `adaptive`:
 - `wave`: review only completed waves plus final review.
 - `final-only`: explicit opt-in for prototypes, mechanical work, or owner-approved low-risk slices.
 
-Immediate-review triggers: public API/schema/shared contract; security/auth/permissions/secrets; money/data-loss/migration; concurrency/distributed behavior; broad cross-cutting diff; weak or missing checks; worker uncertainty/scope expansion; integration conflict; a task whose contract will be consumed before the next wave review.
+Immediate-review triggers: public API/schema/shared contract; security/auth/permissions/secrets; money/data-loss/migration; concurrency/distributed behavior; broad cross-cutting diff; weak or missing checks; implementer uncertainty/scope expansion; integration conflict; a task whose contract will be consumed before the next wave review.
 
-Pending low-risk changes receive one cumulative review of the exact branch-scoped range from `lastReviewedSha` to the pinned reviewed-branch tip at the end of a wave, before fan-in, when the diff becomes incoherent, or before integration/publication; the boundary advances only after a clean verdict. One batch fix worker handles the complete accepted finding list, then the affected range is revalidated and re-reviewed. A final exact-range/whole-branch review precedes main-branch integration or publication.
+Pending low-risk changes receive one cumulative review of the exact branch-scoped range from `lastReviewedSha` to the pinned reviewed-branch tip at the end of a wave, before fan-in, when the diff becomes incoherent, or before integration/publication; the boundary advances only after a clean verdict. One batch fix `implementer` handles the complete accepted finding list, then the affected range is revalidated and re-reviewed. A final exact-range/whole-branch review precedes main-branch integration or publication.
 
-Review evidence is branch-scoped, not parent-`HEAD`-scoped, and never assumes worker-worktree survival: verdicts bind to the exact reviewed branch range; when a worker worktree/branch disappears, the durable handoff patch is replayed at the pinned lane base inside a parent-owned review worktree to reconstruct and review the exact tree; fixes restart from that base with the prior patch applied; and accepted lanes are assembled into an explicitly registered candidate branch handed to `merge-worktree`. This lifecycle contract is owned by `orchestrate-implementation` in `legout/skills`; its hardening is specified in the current plans and is not yet released there.
+Review evidence is branch-scoped, not parent-`HEAD`-scoped, and never assumes implementer-worktree survival: verdicts bind to the exact reviewed branch range; when an implementation worktree/branch disappears, the durable handoff patch is replayed at the pinned lane base inside a parent-owned review worktree to reconstruct and review the exact tree; fixes restart from that base with the prior patch applied; and accepted lanes are assembled into an explicitly registered candidate branch handed to `merge-worktree`. This lifecycle contract is owned by `orchestrate-implementation` in `legout/skills`; its hardening is specified in the current plans and is not yet released there.
 
 ## Safety
 
@@ -253,7 +255,7 @@ After implementation, tests, and independent review pass:
 
 - Vendoring complete upstream skill repositories.
 - Installing other upstream skill packs (`mattpocock/skills`, `obra/superpowers`) — their workflows are consolidated in `legout/skills`.
-- Running all workers as interactive Herdr sessions.
+- Running all implementers and reviewers as interactive Herdr sessions.
 - Automatically resolving semantic merge conflicts.
 - Version-pinning external installs (`npx skills add`, `pi install`) — a separate release-policy decision.
 - An uninstall engine: safe uninstall is documented manual removal of the exact managed block and only generated files confirmed unchanged; setup itself never deletes project documentation.
