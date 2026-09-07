@@ -1,5 +1,7 @@
 # Pi Implementation Orchestrator Initial Release Plan
 
+> **Archived plan — superseded.** This profile-based bootstrap plan was replaced by the consolidated `legout/skills` stack and subsequent package/setup plans. Its unchecked steps are historical, not an active backlog. See `docs/plans/README.md` for the current plan index.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `orchestrate-implementation` with TDD workers to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build, test, document, and publish the first public release of `legout/pi-implementation-orchestrator`.

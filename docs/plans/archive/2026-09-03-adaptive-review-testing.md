@@ -1,5 +1,7 @@
 # Adaptive Review and Focused Testing Implementation Plan
 
+> **Archived plan — completed.** The adaptive test-obligation/review policy shipped in the skills and installer history; the unchecked steps below are the original execution ledger, not an active backlog. See `docs/plans/README.md` for the current plan index.
+
 > **For agentic workers:** Implement this as one cohesive change. Use one fresh worker, one cumulative review of the complete diff, and a fresh re-review only if blocking fixes are required.
 
 **Goal:** Reduce implementation latency by requiring new tests and immediate reviews only where risk justifies them, while preserving focused evidence, cumulative review, and final integration safety.

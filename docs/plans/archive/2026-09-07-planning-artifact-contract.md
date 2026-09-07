@@ -1,12 +1,14 @@
 # Planning artifact contract — implementation plan
 
+> **Archived plan — complete.** Implementation and T4 acceptance passed; this file is retained as the execution record. See `docs/plans/README.md` for the current plan index.
+
 Status: implementation and T4 acceptance complete. Deterministic, isolated distribution, and native semantic checks passed; the source-provenance checker still reports upstream branch drift in five adopted source groups. No publication or real-project migration was performed.
 
 ## Sources and scope
 
-- [Approved specification](../specs/planning-artifact-contract.md), AC-01–AC-12.
-- [Accepted ownership ADR](../adr/0001-shared-planning-contract.md).
-- [Session-backed research](../research/2026-09-07-planning-workflow-audit.md).
+- [Approved specification](../../specs/planning-artifact-contract.md), AC-01–AC-12.
+- [Accepted ownership ADR](../../adr/0001-shared-planning-contract.md).
+- [Session-backed research](../../research/2026-09-07-planning-workflow-audit.md).
 
 Two repositories: this installer and sibling `../skills` (`legout/skills`). The latter was clean at `2fb47df952d69eb8e6673e4e6531bd4531d9ce80` during planning. This installer has prior uncommitted agent-routing edits and new planning documents. Preserve them; obtain an approved clean baseline before managed mutation worktrees are allocated. Do not stash, commit, or discard user work automatically.
 

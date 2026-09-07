@@ -1,5 +1,7 @@
 # Native Pi Package Installation Plan
 
+> **Archived plan — completed/superseded.** The native package manifest and setup prompt shipped; later setup and planning-contract work superseded several details here. Its unchecked steps are historical, not an active backlog. See `docs/plans/README.md` for the current plan index.
+
 > **For agentic workers:** Implement this as one cohesive change with one focused RED/GREEN cycle and one cumulative review.
 
 **Goal:** Make the repository installable as a native Git-backed Pi package and provide a manually invoked setup skill that configures dependencies, planning skills, and a target project only after explicit user approval.

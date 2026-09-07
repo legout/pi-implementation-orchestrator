@@ -1,8 +1,10 @@
 # Implementation plan: durable orchestration and safe skill handoffs
 
+> **Archived plan — implementation mostly landed.** Durable handoff/recovery, domain/prototype boundaries, and offline regression coverage shipped. The remaining native managed-worker lifecycle execution is narrowed into `docs/plans/2026-09-07-native-lifecycle-acceptance.md`. The original unchecked ledger is retained for traceability.
+
 ## Status and scope
 
-**Proposed companion plan; approval required before implementation.** Parent plan: [safe, faster setup](2026-09-07-orchestrator-safety-and-setup.md).
+**Archived implementation record.** Parent plan: [safe, faster setup](2026-09-07-orchestrator-safety-and-setup.md).
 
 - **Goal:** close review findings 4–6 without depending on worker-worktree survival, bypassing production approval, or creating contradictory domain glossaries.
 - **Source requirements:** parent acceptance criteria A4–A6 and A10. Existing skill sources are in the sibling `../skills` repository, reviewed at main `75db0c4`.

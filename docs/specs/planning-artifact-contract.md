@@ -86,4 +86,4 @@ Rerunning setup can update its managed guidance and mapping after preview/approv
 
 ## Approved decisions and next gate
 
-The owner approved the dedicated shared contract skill and the setup-managed `docs/agents/artifacts.md` mapping. Verify distribution in an isolated installation before accepting the implementation. The [implementation plan](../plans/2026-09-07-planning-artifact-contract.md) defines that gate and the cross-repository tasks; its execution is pending approval.
+The owner approved the dedicated shared contract skill and the setup-managed `docs/agents/artifacts.md` mapping. Implementation and T4 acceptance are complete; the execution record is preserved in the [archived implementation plan](../plans/archive/2026-09-07-planning-artifact-contract.md).

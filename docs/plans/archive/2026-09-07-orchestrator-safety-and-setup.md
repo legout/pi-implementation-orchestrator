@@ -1,11 +1,13 @@
 # Implementation plan: safe, faster orchestrator setup
 
+> **Archived plan — implemented.** Setup safety, inspect/dry-run/apply validation, bounded prompt flow, generated routing, and documentation landed in the installer history. Native lifecycle acceptance is tracked separately in the active plan. The original unchecked ledger is retained for traceability.
+
 ## Status and scope
 
-**Proposed plan; approval required before implementation.** This file records the owner's request to fix review findings 1–8, reduce agentic setup overhead, and consider stronger generated instructions. It does not authorize installs, publication, or changes to a user's existing projects.
+**Archived implementation record.** This file records the owner's request to fix review findings 1–8, reduce agentic setup overhead, and consider stronger generated instructions. It does not authorize installs, publication, or changes to a user's existing projects.
 
 - **Goal:** make direct and prompt-driven setup share one safe deterministic path, restore trustworthy tests, and give projects concise routing/safety instructions.
-- **Source requirements:** the owner's follow-up to the September 7 critical review; numbered acceptance criteria below preserve that request for a fresh implementer. Existing architectural baseline: [../design.md](../design.md), whose stale claims must be corrected rather than treated as overriding the owner.
+- **Source requirements:** the owner's follow-up to the September 7 critical review; numbered acceptance criteria below preserve that request for a fresh implementer. Existing architectural baseline: [../../design.md](../../design.md), whose stale claims were corrected rather than treated as overriding the owner.
 - **Reviewed baseline:** `pi-implementation-orchestrator` main at `5a69c07`; sibling `../skills` main at `75db0c4`. Recheck both before implementation; do not reset either repository to these commits.
 - **Companion plan:** [skill lifecycle and handoff fixes](2026-09-07-orchestrator-skill-contracts.md) owns runtime-skill changes in `../skills`, including findings 4–6. Both plans together cover all eight findings.
 - **Ownership:** this repository remains prompt/setup-only. Runtime skills and their tests remain in `legout/skills`. No new Pi extension, execution engine, vendored skill copies, or production dependency.

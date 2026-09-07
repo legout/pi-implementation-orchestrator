@@ -1,5 +1,7 @@
 # Implementation Plan: Consolidate on the legout/skills planning stack
 
+> **Archived plan — completed.** The installer now uses the consolidated `legout/skills` stack; the later planning-contract release added the explicit contract skill. The unchecked steps below are the historical execution ledger, not an active backlog. See `docs/plans/README.md` for the current plan index.
+
 ## Header
 
 - **Goal:** Remove the `mattpocock/skills` and `obra/superpowers` upstream dependencies from the installer and replace them with their consolidated clones from `legout/skills`, collapsing the three planning profiles (`matt`, `superpowers`, `both`) into one canonical stack.
