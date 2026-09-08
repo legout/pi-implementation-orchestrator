@@ -80,12 +80,28 @@ Additional `legout/skills` entries you can add manually: `capture-project-vision
 
 ## Workflows
 
-- **Planning:** `shape-design` (idea → approved design or written spec; feasibility questions hand off to `prototype-question`) → `write-implementation-plan` (spec → executable, testable plan) → `orchestrate-implementation` executes the plan.
+You drive intent and approvals; the skills carry the mechanics. Three layers make that work: the generated `AGENTS.md` block routes each request to the right skill, installed skill descriptions auto-load the matching skill when your request fits (no `/skill:` call needed — that just forces it), and each `SKILL.md` holds the actual procedure. You never need to know the workflow internals — phrase the intent and answer the approval gates.
+
+A typical feature lifecycle:
+
+1. **Shape:** "Shape the design for X — ask me the open questions." `shape-design` interviews you, then runs its capture checkpoint: resolved terms go to the owning glossary (`CONTEXT.md` is created lazily only when the first term is actually resolved — "no new terms" is a valid outcome), and only qualifying decisions (costly to reverse, surprising, made among real alternatives) earn an ADR. Feasibility questions hand off to `prototype-question`; durable findings land in `docs/research/` as evidence, never as authorization. After your approval, behavior and acceptance are written to `docs/specs/`.
+2. **Plan:** "Write the implementation plan for the approved spec." `write-implementation-plan` produces the smallest executable map — tasks with files, interfaces, dependencies, test obligations, and validation. You approve it.
+3. **Implement:** "Implement the plan." `orchestrate-implementation` checks readiness first: an approved behavioral source is mandatory, and research alone or a draft spec refuses and routes back to shaping. It then dispatches one `implementer` per lane in managed worktrees and supplies fresh `code-reviewer` review.
+4. **Integrate:** "Merge the candidate." `merge-worktree` runs local integration; pushing and publication stay separate approvals.
+
+A bounded change collapses this: an approved issue with acceptance criteria goes straight to step 3 — no spec, plan, or tickets.
+
 - **During execution:** `implementer` applies `systematic-debugging` to failing checks and `verification-before-completion` before claiming done; the orchestrator supplies independent `code-reviewer` review.
 
-### Ticket and plan inputs
+### Plans vs. tickets
 
 Plans and tickets must reference their exact feature sources (ADR, specification, or issue). The orchestrator normalizes different plan formats with a read-only scout and never rewrites your planning documents.
+
+Tickets are optional. The plan's tasks already are the execution units — converting them to tickets would create a second, drifting copy of the same task bodies, and the planning contract forbids duplicate editable task definitions. Create tickets only when coordination must outlive the current conversation: multi-session work, team visibility in GitHub Issues, an established tracker convention, or an explicit request. One decision rule: *will someone — including future-you — need to find this task outside this conversation?* No → plan only. Yes → tickets own the canonical task bodies and the plan becomes a thin overview linking them. The tracker setup in `docs/agents/issue-tracker.md` only declares which tracker exists; it never mandates creating tickets.
+
+### Sequential vs. parallel execution
+
+Parallelism comes from the dependency graph and write ownership, not from tickets — distinct ticket files alone never justify parallel writers. Tasks run in parallel managed worktrees only when all three hold: dependencies satisfied, stable consumed interfaces, and non-conflicting file ownership. Plan for it by separating write targets and defining the contract task first (schema → API and CLI in parallel → integration). Sequential execution is the right default when lanes share files, interfaces are still moving, or the feature is small.
 
 ## Worktree integration
 
@@ -151,7 +167,7 @@ Persistent peers (`architecture-peer`, `domain-peer`, `quality-peer`) run as exp
 - **Inspect:** `./setup.sh --project /path --inspect` — read-only report as described above.
 - **Dry run:** `./setup.sh --project /path --dry-run` prints every command and the complete resulting files; nothing is executed or written. The setup prompt always performs this preview before asking for approval.
 - **Update / rerun:** rerunning setup replaces the one managed block and regenerates the three managed docs (artifact map, tracker, domain) idempotently; surrounding content survives. After a partial write failure, rerun setup to converge. Ambiguous or malformed markers abort safely before any install.
-- **Implementer fixes and recovery:** review evidence is branch-scoped — a verdict applies to an exact reviewed range from a pinned boundary to the reviewed branch tip, never to a moved parent `HEAD`. When an implementation worktree or branch no longer exists, the durable handoff patch is replayed in a parent-owned review worktree at the pinned lane base to reconstruct and review the exact tree; fixes start from the same base with the prior patch applied; accepted lanes are assembled into an explicitly registered candidate branch that is handed to `merge-worktree` for integration. The recovery boundary is durable patch paths and pinned refs, not child-session or worktree survival. The detailed lifecycle is owned by `orchestrate-implementation` in [`legout/skills`](https://github.com/legout/skills); the hardening of that lifecycle (pinned bases, reconstructed review, registered candidates) is specified in this repository's current plans and is not yet released in the skills repository.
+- **Implementer fixes and recovery:** review evidence is branch-scoped — a verdict applies to an exact reviewed range from a pinned boundary to the reviewed branch tip, never to a moved parent `HEAD`. When an implementation worktree or branch no longer exists, the durable handoff patch is replayed in a parent-owned review worktree at the pinned lane base to reconstruct and review the exact tree; fixes start from the same base with the prior patch applied; accepted lanes are assembled into an explicitly registered candidate branch that is handed to `merge-worktree` for integration. The recovery boundary is durable patch paths and pinned refs, not child-session or worktree survival. This lifecycle is shipped in `orchestrate-implementation` in [`legout/skills`](https://github.com/legout/skills) (pinned bases, reconstructed review, registered candidates); one remaining native-runtime acceptance run is tracked in [`docs/plans/`](docs/plans/).
 - **Safe uninstall:** remove the Pi package with `pi remove git:github.com/legout/pi-implementation-orchestrator`; delete the managed block between the `pi-implementation-orchestrator:start/end` markers from your instruction file (keep everything else in that file); remove `docs/agents/artifacts.md`, `docs/agents/issue-tracker.md`, and `docs/agents/domain.md` **only after confirming they still match the generated content and contain none of your edits** — keep any other documents under `docs/agents/`, modified files, and anything you own. Shared skills and Pi packages are unaffected by removing this package; remove them separately only if you want to (for example `npx skills remove <skill> --global --agent pi` for globally installed skills).
 - **Troubleshooting:** run with `--inspect` and `--dry-run` first; a refusal naming a symlink or a malformed marker is a preflight stop, not a failure to clean up; check `pi install` output; see [pi docs](https://github.com/earendil-works/pi-coding-agent).
 
