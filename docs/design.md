@@ -2,7 +2,7 @@
 
 ## Goal
 
-Publish a safe Pi installer and setup prompt for implementation-orchestration and planning skills maintained in `legout/skills`, a preconfigured `implementer`/`code-reviewer` pair with per-task test obligations, native Pi subagents, optional persistent intercom peers, and interactive project setup.
+Publish a safe Pi installer and setup prompt for implementation-orchestration and planning skills maintained in `legout/skills`, a preconfigured `implementer`/`code-reviewer` pair with risk-based validation and proportional review, native Pi subagents, optional persistent intercom peers, and interactive project setup.
 
 ## Repository
 
@@ -24,7 +24,7 @@ planning skills
   → orchestrate-implementation
   → preconfigured `implementer` in managed worktrees
   → focused validation
-  → fresh `code-reviewer` review
+  → proportional parent/reviewer checks
   → orchestrator-owned integration
   → separate publication authority
 ```
@@ -87,12 +87,12 @@ Install exactly this set from `legout/skills`; no other upstream skill repositor
 - `prototype-question` — disposable spikes; `shape-design` hands feasibility questions to it.
 - `verification-before-completion` — evidence-before-claims discipline for the implementer.
 - `systematic-debugging` — reproduction and root-cause method for failing checks.
-- `orchestrate-implementation` — implementer/code-reviewer orchestration; carries the TDD/test-seam guidance for `new-test` tasks.
+- `orchestrate-implementation` — implementer/code-reviewer orchestration; carries the TDD/test-seam guidance for `new-test` validation units.
 - `merge-worktree` — worktree integration; resolves conflicts inline from source intent.
 - `make-release` — release publication.
 - `planning-contract` — shared planning artifact and handoff contract (classification defaults, capture checkpoint, approval/readiness rules, missing-contract refusal) consumed by the planning skills above; installed explicitly alongside them because the skills CLI does not resolve dependencies.
 
-The `implementer` gets TDD discipline through `orchestrate-implementation`; the orchestrator supplies a fresh read-only `code-reviewer`. Setup consumes these existing profiles and does not create or override their model/tool configuration. If a preferred profile is unavailable, the owner must approve a fallback to builtin `worker`/`reviewer`, and the resolved names must be recorded in the run manifest. Additional `legout/skills` entries (`capture-project-vision`, `doc-coauthoring`, `simplify-code`, `review-codebase-architecture`) are available but not installed by default.
+The `implementer` gets TDD discipline through `orchestrate-implementation`; when the selected review policy requires it, the orchestrator supplies a fresh read-only `code-reviewer`. Setup consumes these existing profiles and does not create or override their model/tool configuration. If a preferred profile is unavailable, the owner must approve a fallback to builtin `worker`/`reviewer`, and the resolved names must be recorded in the run manifest. Additional `legout/skills` entries (`capture-project-vision`, `doc-coauthoring`, `simplify-code`, `review-codebase-architecture`) are available but not installed by default.
 
 ## Upstream Installation
 
@@ -144,7 +144,7 @@ If one of `CLAUDE.md` or `AGENTS.md` already exists, update that file. If both e
 
 Write or update one marked workflow block that documents:
 
-- per-task test obligations (`new-test`, `existing-check`, `no-new-test`);
+- risk-based validation-unit obligations (`new-test`, `existing-check`, `no-new-test`);
 - preferred preconfigured `implementer` and `code-reviewer` roles, with explicit fallback approval;
 - adaptive orchestrator-owned review;
 - routing and authority rules (which skill handles which decision — including loading the shared `planning-contract` skill and the `docs/agents/artifacts.md` mapping — `supervised` default with explicit integration/publication gates, one writer per worktree, evidence discipline, merge/release authority);
@@ -164,24 +164,24 @@ Re-running setup updates the one managed block and regenerates the three managed
 
 ## Test obligations and review policy
 
-Validation evidence is mandatory for every task; a new test is not. During preflight each task receives exactly one obligation:
+Validation evidence is mandatory; a new test is not. During preflight each validation unit receives exactly one obligation, and related tasks may share a validation unit:
 
-- `new-test`: meaningful behavior, bug regression, branching/state, parsing/validation, security, permissions, money, destructive data handling, concurrency, public contracts, or behavior without existing coverage. Follow the TDD guidance carried by `orchestrate-implementation` and require red-green-refactor evidence.
-- `existing-check`: existing tests already exercise the affected behavior. Run and report the named focused checks without adding redundant tests.
-- `no-new-test`: documentation, formatting, comments, static metadata, generated artifacts, typo correction, or similar low-yield changes. Run the smallest meaningful validation.
+- `new-test`: changed behavior lacks meaningful existing coverage and a named reachable failure would otherwise be unprotected. Follow the TDD guidance carried by `orchestrate-implementation` and require failing-test, minimal-implementation, and passing-check evidence.
+- `existing-check`: an existing focused check already exercises the affected behavior. Run and report that check without adding redundant tests.
+- `no-new-test`: a new test would prove little, including documentation, formatting, comments, static metadata, generated artifacts, mechanical changes, or behavior-neutral refactoring. Run the smallest meaningful parse, build, smoke check, or diff inspection.
 
 The review policy is chosen per run and defaults to `adaptive`:
 
-- `adaptive` (default): immediate review for high-risk or dependency-defining work; low-risk work queues behind a `lastReviewedSha` boundary.
+- `adaptive` (default): parent diff inspection for low-risk work, one candidate review for normal-risk work, and immediate plus candidate review for high-risk or dependency-defining work.
 - `strict`: immediate task review plus final review.
-- `wave`: review only completed waves plus final review.
-- `final-only`: explicit opt-in for prototypes, mechanical work, or owner-approved low-risk slices.
+- `final-only`: one independent candidate review, with no task or wave reviews.
+- `parent-only`: parent diff inspection plus focused checks; use for low-risk changes only.
 
 Immediate-review triggers: public API/schema/shared contract; security/auth/permissions/secrets; money/data-loss/migration; concurrency/distributed behavior; broad cross-cutting diff; weak or missing checks; implementer uncertainty/scope expansion; integration conflict; a task whose contract will be consumed before the next wave review.
 
-Pending low-risk changes receive one cumulative review of the exact branch-scoped range from `lastReviewedSha` to the pinned reviewed-branch tip at the end of a wave, before fan-in, when the diff becomes incoherent, or before integration/publication; the boundary advances only after a clean verdict. One batch fix `implementer` handles the complete accepted finding list, then the affected range is revalidated and re-reviewed. A final exact-range/whole-branch review precedes main-branch integration or publication.
+At a wave boundary, independently review only high-risk lanes and dependency-defining contracts needed by the next wave. Defer normal-risk review until the candidate is assembled; low-risk lanes receive parent inspection. Review the exact candidate range after accepted lanes are assembled; one correction round is the default.
 
-Review evidence is branch-scoped, not parent-`HEAD`-scoped, and never assumes implementer-worktree survival: verdicts bind to the exact reviewed branch range; when an implementation worktree/branch disappears, the durable handoff patch is replayed at the pinned lane base inside a parent-owned review worktree to reconstruct and review the exact tree; fixes restart from that base with the prior patch applied; and accepted lanes are assembled into an explicitly registered candidate branch handed to `merge-worktree`. This lifecycle contract is owned by `orchestrate-implementation` in `legout/skills`; its hardening is specified in the current plans and is not yet released there.
+Review evidence is branch-scoped, not parent-`HEAD`-scoped, and never assumes implementer-worktree survival: verdicts bind to the exact reviewed branch range; when an implementation worktree/branch disappears, the durable handoff patch is replayed at the pinned lane base inside a parent-owned review worktree to reconstruct and review the exact tree; fixes restart from that base with the prior patch applied; and accepted lanes are assembled into an explicitly registered candidate branch handed to `merge-worktree`. This lifecycle contract is owned by `orchestrate-implementation` in the current `legout/skills` catalog.
 
 ## Safety
 

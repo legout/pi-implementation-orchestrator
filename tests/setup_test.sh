@@ -529,14 +529,15 @@ test_replacement_preserves_file_mode() {
 }
 
 test_adaptive_review_and_test_policy() {
-  assert_contains "$ROOT/README.md" 'Focused TDD is required only for `new-test` work'
-  assert_contains "$ROOT/README.md" 'low-risk changes may be batch-reviewed'
-  assert_contains "$ROOT/README.md" 'high-risk changes are reviewed immediately'
+  assert_contains "$ROOT/README.md" 'Every validation unit receives exactly one test obligation'
+  assert_contains "$ROOT/README.md" 'low-risk work uses parent diff inspection'
+  assert_contains "$ROOT/README.md" 'high-risk or dependency-defining work gets immediate plus candidate review'
+  assert_not_contains "$ROOT/README.md" 'low-risk changes may be batch-reviewed'
   new_case
   stub_commands
   printf '1\n1\n1\ny\n' | "$ROOT/setup.sh" --project "$TMP/project" >/dev/null 2>&1
-  assert_contains "$TMP/project/AGENTS.md" 'Every task declares one test obligation: `new-test`, `existing-check`, or `no-new-test`; focused TDD is required only for `new-test` work.'
-  assert_contains "$TMP/project/AGENTS.md" 'Review is adaptive and orchestrator-owned: high-risk or dependency-defining changes are reviewed immediately; low-risk changes may be reviewed cumulatively at a wave boundary.'
+  assert_contains "$TMP/project/AGENTS.md" 'Every validation unit receives one test obligation: `new-test`, `existing-check`, or `no-new-test`; related tasks may share a validation unit, and focused TDD is required only for `new-test` work.'
+  assert_contains "$TMP/project/AGENTS.md" 'Review is adaptive and orchestrator-owned: low-risk work uses parent diff inspection; normal-risk work gets one candidate review; high-risk or dependency-defining work gets immediate plus candidate review.'
 }
 
 test_routing_authority_block() {
@@ -553,7 +554,7 @@ test_routing_authority_block() {
   assert_not_contains "$block" 'Source precedence:'
   assert_contains "$block" 'Use `shape-design` for unresolved behavior/design choices'
   assert_contains "$block" 'Default orchestrated execution to `supervised`'
-  assert_contains "$block" 'Route implementation to the preconfigured `implementer` agent and independent review to a fresh read-only `code-reviewer`'
+  assert_contains "$block" 'Route implementation to the preconfigured `implementer` agent and, when required by the selected policy, independent review to a fresh read-only `code-reviewer`'
   assert_contains "$block" 'stop and ask the owner before using builtin `worker`/`reviewer`'
   assert_contains "$block" 'record the approved resolved names in the run manifest'
   assert_contains "$block" 'Use `pi-subagents` for spawned-child lifecycle'

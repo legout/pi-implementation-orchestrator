@@ -292,10 +292,6 @@ tracker_doc_label() {
   sed -n 's/^Tracker: \(.*\)\.$/\1/p' "$1" 2>/dev/null | head -n 1
 }
 
-recognized_tracker_doc() {
-  grep -Eq '^Tracker: .+\.$' "$1" 2>/dev/null
-}
-
 layout_doc_label() {
   local label
   label=$(sed -n 's/^Layout: multiple contexts\.$/multiple contexts/p' "$1" 2>/dev/null | head -n 1)
@@ -303,10 +299,6 @@ layout_doc_label() {
     label=$(sed -n 's/^Layout: single context\.$/single context/p' "$1" 2>/dev/null | head -n 1)
   fi
   echo "$label"
-}
-
-recognized_layout_doc() {
-  grep -Eq '^Layout: (single context|multiple contexts)\.$' "$1" 2>/dev/null
 }
 
 instruction_files_present() {
@@ -534,23 +526,27 @@ resolve_choices() {
   fi
 }
 
+# Shared awk helper: literal (not regex) occurrence count of one token per line.
+MARKER_OCCURRENCES_AWK='
+  function occurrences(line, token, pos, hit, total) {
+    pos = 1
+    total = 0
+    while (pos <= length(line)) {
+      hit = index(substr(line, pos), token)
+      if (!hit) break
+      total++
+      pos += hit + length(token) - 1
+    }
+    return total
+  }
+'
+
 count_marker() {
   # usage: count_marker FILE MARKER -> prints every marker occurrence
   if [ ! -f "$1" ]; then
     echo 0
   else
-    awk -v marker="$2" '
-      function occurrences(line, token, pos, hit, total) {
-        pos = 1
-        total = 0
-        while (pos <= length(line)) {
-          hit = index(substr(line, pos), token)
-          if (!hit) break
-          total++
-          pos += hit + length(token) - 1
-        }
-        return total
-      }
+    awk -v marker="$2" "$MARKER_OCCURRENCES_AWK"'
       { count += occurrences($0, marker) }
       END { print count + 0 }
     ' "$1"
@@ -562,18 +558,7 @@ marker_invalid() {
   if [ ! -f "$1" ]; then
     echo 0
   elif [ "$2" = "$START_MARKER" ]; then
-    awk -v marker="$2" '
-      function occurrences(line, token, pos, hit, total) {
-        pos = 1
-        total = 0
-        while (pos <= length(line)) {
-          hit = index(substr(line, pos), token)
-          if (!hit) break
-          total++
-          pos += hit + length(token) - 1
-        }
-        return total
-      }
+    awk -v marker="$2" "$MARKER_OCCURRENCES_AWK"'
       {
         total = occurrences($0, marker)
         if (total > 0 && !(($0 == marker) ||
@@ -587,18 +572,7 @@ marker_invalid() {
       END { print invalid + 0 }
     ' "$1"
   else
-    awk -v marker="$2" '
-      function occurrences(line, token, pos, hit, total) {
-        pos = 1
-        total = 0
-        while (pos <= length(line)) {
-          hit = index(substr(line, pos), token)
-          if (!hit) break
-          total++
-          pos += hit + length(token) - 1
-        }
-        return total
-      }
+    awk -v marker="$2" "$MARKER_OCCURRENCES_AWK"'
       {
         total = occurrences($0, marker)
         if (total > 0 && $0 != marker) invalid = 1
@@ -817,8 +791,8 @@ render_workflow_block() {
   cat <<'EOF'
 ## Agent workflow
 
-- Every task declares one test obligation: `new-test`, `existing-check`, or `no-new-test`; focused TDD is required only for `new-test` work.
-- Review is adaptive and orchestrator-owned: high-risk or dependency-defining changes are reviewed immediately; low-risk changes may be reviewed cumulatively at a wave boundary.
+- Every validation unit receives one test obligation: `new-test`, `existing-check`, or `no-new-test`; related tasks may share a validation unit, and focused TDD is required only for `new-test` work.
+- Review is adaptive and orchestrator-owned: low-risk work uses parent diff inspection; normal-risk work gets one candidate review; high-risk or dependency-defining work gets immediate plus candidate review.
 - Plans and tickets reference exact feature sources; this file defines stable repository-wide scope.
 - Scoped authority: glossaries own terminology; ADRs own accepted architectural constraints; specifications own behavior; plans/tickets own execution decomposition. No scope silently overrides another; reconcile owner decisions into the affected artifacts before dependent work proceeds.
 - Stop before implementation when authoritative sources conflict.
@@ -828,7 +802,7 @@ render_workflow_block() {
 - Read `docs/agents/artifacts.md` for the project artifact mapping and load the `planning-contract` skill for artifact classification and planning handoffs; read `docs/agents/issue-tracker.md` and `docs/agents/domain.md` when their scope applies. Preserve established project conventions.
 - Use `shape-design` for unresolved behavior/design choices, `write-implementation-plan` for approved multi-step work, and `orchestrate-implementation` to execute approved work. Do not turn a trivial edit into a planning exercise.
 - Default orchestrated execution to `supervised`: the `implementer` may implement and validate, but candidate assembly, integration, and publication retain explicit approval gates.
-- Route implementation to the preconfigured `implementer` agent and independent review to a fresh read-only `code-reviewer`; if either is unavailable, stop and ask the owner before using builtin `worker`/`reviewer`, and record the approved resolved names in the run manifest.
+- Route implementation to the preconfigured `implementer` agent and, when required by the selected policy, independent review to a fresh read-only `code-reviewer`; if either is unavailable, stop and ask the owner before using builtin `worker`/`reviewer`, and record the approved resolved names in the run manifest.
 - Keep one writer per worktree. Use `pi-subagents` for spawned-child lifecycle; named persistent `pi-intercom` peers are read-only advisors, not implementation or review agents.
 - Use `systematic-debugging` for unexpected failures and `verification-before-completion` before success claims; match evidence to the exact change and report skipped checks.
 - Use `merge-worktree` for target integration and `make-release` for releases. Local integration does not authorize pushing; opening a PR does not authorize merging; release or publication requires its own approved plan.
@@ -1039,10 +1013,6 @@ file_mode() {
   '' | *[!0-7]*) m=644 ;;
   esac
   echo "$m"
-}
-
-same_file_contents() {
-  cmp -s "$1" "$2"
 }
 
 stat_sig() {
@@ -1318,13 +1288,11 @@ exec_install() {
 run_installs() {
   STEPS_DONE=
   exec_install "npx skills add legout/skills (${#LEGOUT_SKILLS[@]} skills)" ${SKILL_ARGS[@]+"${SKILL_ARGS[@]}"}
-  if [ "$SKILL_SCOPE" = Project ]; then
-    exec_install "pi install --local npm:pi-subagents" pi install --local npm:pi-subagents
-    exec_install "pi install --local npm:pi-intercom" pi install --local npm:pi-intercom
-  else
-    exec_install "pi install npm:pi-subagents" pi install npm:pi-subagents
-    exec_install "pi install npm:pi-intercom" pi install npm:pi-intercom
-  fi
+  local scope_flag=""
+  [ "$SKILL_SCOPE" = Project ] && scope_flag="--local"
+  local desc="pi install${scope_flag:+ $scope_flag}"
+  exec_install "$desc npm:pi-subagents" pi install $scope_flag npm:pi-subagents
+  exec_install "$desc npm:pi-intercom" pi install $scope_flag npm:pi-intercom
 }
 
 apply_phase() {

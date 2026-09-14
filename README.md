@@ -1,6 +1,6 @@
 # pi-implementation-orchestrator
 
-Plan features with the consolidated [`legout/skills`](https://github.com/legout/skills) planning stack, then execute the plans with a preconfigured `implementer`, per-task test obligations, adaptive `code-reviewer` review, and orchestrator-owned integration.
+Plan features with the consolidated [`legout/skills`](https://github.com/legout/skills) planning stack, then execute the plans with a preconfigured `implementer`, risk-based validation obligations, proportional review, and orchestrator-owned integration.
 
 ## Architecture
 
@@ -10,7 +10,7 @@ planning skills
   → orchestrate-implementation
   → preconfigured `implementer` in managed worktrees
   → focused validation
-  → fresh `code-reviewer` review
+  → proportional parent/reviewer checks
   → orchestrator-owned integration
   → separate publication authority
 ```
@@ -65,7 +65,7 @@ For a pinned tag or commit, append `@<ref>` to the Git source. A direct alternat
 | `prototype-question` | disposable feasibility spikes | hands off from `shape-design`'s Spike path |
 | `verification-before-completion` | evidence-before-claims discipline | Superpowers `verification-before-completion` |
 | `systematic-debugging` | reproduction and root-cause method | Matt's `diagnosing-bugs`, Superpowers `systematic-debugging` |
-| `orchestrate-implementation` | implementer/code-reviewer orchestration | Superpowers worktree patterns; carries Matt's `tdd` guidance for `new-test` tasks |
+| `orchestrate-implementation` | implementer/code-reviewer orchestration | Superpowers worktree patterns; carries Matt's `tdd` guidance for `new-test` validation units |
 | `merge-worktree` | worktree integration | Superpowers `finishing-a-development-branch`; resolves conflicts inline (no `resolving-merge-conflicts` dependency) |
 | `make-release` | release publication | — |
 | `planning-contract` | shared planning artifact and handoff contract (classification defaults, capture checkpoint, approval/readiness rules) consumed by the other planning skills | — (locally authored in `legout/skills`; installed explicitly alongside its consumers) |
@@ -85,13 +85,13 @@ You drive intent and approvals; the skills carry the mechanics. Three layers mak
 A typical feature lifecycle:
 
 1. **Shape:** "Shape the design for X — ask me the open questions." `shape-design` interviews you, then runs its capture checkpoint: resolved terms go to the owning glossary (`CONTEXT.md` is created lazily only when the first term is actually resolved — "no new terms" is a valid outcome), and only qualifying decisions (costly to reverse, surprising, made among real alternatives) earn an ADR. Feasibility questions hand off to `prototype-question`; durable findings land in `docs/research/` as evidence, never as authorization. After your approval, behavior and acceptance are written to `docs/specs/`.
-2. **Plan:** "Write the implementation plan for the approved spec." `write-implementation-plan` produces the smallest executable map — tasks with files, interfaces, dependencies, test obligations, and validation. You approve it.
-3. **Implement:** "Implement the plan." `orchestrate-implementation` checks readiness first: an approved behavioral source is mandatory, and research alone or a draft spec refuses and routes back to shaping. It then dispatches one `implementer` per lane in managed worktrees and supplies fresh `code-reviewer` review.
+2. **Plan:** "Write the implementation plan for the approved spec." `write-implementation-plan` produces the smallest executable map — tracer-bullet slices with files, interfaces, dependencies, validation obligations, and evidence. You approve it.
+3. **Implement:** "Implement the plan." `orchestrate-implementation` checks readiness first: an approved behavioral source is mandatory, and research alone or a draft spec refuses and routes back to shaping. It then dispatches one `implementer` per lane in managed worktrees and applies proportional validation and review.
 4. **Integrate:** "Merge the candidate." `merge-worktree` runs local integration; pushing and publication stay separate approvals.
 
 A bounded change collapses this: an approved issue with acceptance criteria goes straight to step 3 — no spec, plan, or tickets.
 
-- **During execution:** `implementer` applies `systematic-debugging` to failing checks and `verification-before-completion` before claiming done; the orchestrator supplies independent `code-reviewer` review.
+- **During execution:** `implementer` applies `systematic-debugging` to failing checks and `verification-before-completion` before claiming done; the orchestrator supplies independent review when the selected policy requires it.
 
 ### Plans vs. tickets
 
@@ -115,7 +115,7 @@ Release validation is build-focused by default. Python artifacts also receive me
 
 ## Project documentation
 
-`setup.sh --project` writes one managed block (between `<!-- pi-implementation-orchestrator:start/end -->` markers) into `AGENTS.md` or `CLAUDE.md` plus `docs/agents/artifacts.md`, `docs/agents/issue-tracker.md`, and `docs/agents/domain.md`. Everything outside the markers is preserved byte-for-byte. The block records the test-obligation and adaptive-review policies, scoped authority, and a **Routing and authority** section (which skill resolves which kind of decision — including loading the shared `planning-contract` skill and the `docs/agents/artifacts.md` mapping — the `supervised` default with explicit approval gates for candidate assembly/integration/publication, one writer per worktree, evidence discipline, and merge/release authority), followed by a layout-aware documentation map: single-context repositories get a canonical root `CONTEXT.md`; multi-context repositories get per-context glossaries plus an optional `CONTEXT-MAP.md` and never declare a root `CONTEXT.md` canonical. The generated block stays under roughly 500 words and links to project docs instead of duplicating skill procedures.
+`setup.sh --project` writes one managed block (between `<!-- pi-implementation-orchestrator:start/end -->` markers) into `AGENTS.md` or `CLAUDE.md` plus `docs/agents/artifacts.md`, `docs/agents/issue-tracker.md`, and `docs/agents/domain.md`. Everything outside the markers is preserved byte-for-byte. The block records the risk-based validation and adaptive-review policies, scoped authority, and a **Routing and authority** section (which skill resolves which kind of decision — including loading the shared `planning-contract` skill and the `docs/agents/artifacts.md` mapping — the `supervised` default with explicit approval gates for candidate assembly/integration/publication, one writer per worktree, evidence discipline, and merge/release authority), followed by a layout-aware documentation map: single-context repositories get a canonical root `CONTEXT.md`; multi-context repositories get per-context glossaries plus an optional `CONTEXT-MAP.md` and never declare a root `CONTEXT.md` canonical. The generated block stays under roughly 500 words and links to project docs instead of duplicating skill procedures.
 
 Scoped authority inside a project: glossaries own terminology; ADRs own accepted architectural constraints; specifications own behavior; plans/tickets own execution decomposition. No scope silently overrides another — current owner decisions are authoritative but must be reconciled into the affected artifacts before dependent work proceeds. Work stops before implementation when authoritative sources conflict.
 
@@ -126,30 +126,30 @@ Documentation map: `CONTEXT.md` (domain vocabulary), `docs/adr/` (decisions), `d
 ## Execution modes
 
 - **`plan-only`** — normalize inputs, create manifest and task briefs, no source edits.
-- **`supervised`** (default) — run the implementer, validation, review and fix cycles; pause before integration/publication.
+- **`supervised`** (default) — run the implementer with proportional validation/review and fix cycles; pause before integration/publication.
 - **`autonomous`** — same loop; cherry-pick accepted commits when clean; pause on conflicts, unresolved decisions, failed gates, push, merge, deploy, or release.
 
 ## Implementer and code-reviewer contracts
 
 The orchestrator consumes existing Pi subagent profiles; setup does not create or override user models or agent definitions. Prefer the preconfigured `implementer` for implementation and `code-reviewer` for independent review. If either profile is unavailable, stop and get owner approval before using builtin `worker` or `reviewer`, then record the resolved names in the run manifest. Before dispatch, confirm the selected profiles with `subagent({ action: "list", capabilities: true })` and verify their tool permissions match the role.
 
-Evidence is always mandatory; a new test is not. Every task declares exactly one test obligation during preflight:
+Evidence is always mandatory; a new test is not. Every validation unit receives exactly one test obligation during preflight; related tasks may share a validation unit:
 
-- **`new-test`** — new behavior, bug regression, branching/state, parsing/validation, security, permissions, money, destructive data handling, concurrency, public contracts, or behavior without existing coverage (e.g. a new endpoint, a fixed off-by-one bug). Focused TDD is required only for `new-test` work: failing test → minimal implementation → passing test → refactor.
-- **`existing-check`** — existing tests already exercise the affected behavior (e.g. a refactor inside covered seams). Add no redundant test; run and report the named focused checks.
-- **`no-new-test`** — documentation, formatting, comments, static metadata, generated artifacts, typo correction, or another change where a new test proves little (e.g. a README edit). Run the smallest meaningful lint, parse, build, diff, or manual validation.
+- **`new-test`** — changed behavior lacks meaningful existing coverage and a named reachable failure would otherwise be unprotected. Focused TDD is required only for `new-test` work: failing test → minimal implementation → passing focused check.
+- **`existing-check`** — an existing focused check already exercises the affected behavior. Add no redundant test; run and report that check.
+- **`no-new-test`** — a new test would prove little, including documentation, formatting, comments, static metadata, generated artifacts, mechanical changes, or behavior-neutral refactoring. Run the smallest meaningful parse, build, smoke check, or diff inspection.
 
 An implementer may challenge its assigned obligation after inspection but must report why; it may never silently skip validation.
 
 - **Implementer:** sole writer in one managed worktree; one bounded brief per run; report commit IDs, changed files, obligation, rationale, commands, results, and residual risks. No scope expansion, cross-lane integration, or publication.
-- **Review policy:** adaptive and orchestrator-owned — high-risk changes are reviewed immediately; low-risk changes may be batch-reviewed cumulatively from a `lastReviewedSha` boundary to the pinned tip of the reviewed branch at a wave boundary. Alternatives: `strict` (immediate task review plus final review), `wave` (review completed waves plus final review), and `final-only` (explicit opt-in for prototypes or mechanical work).
+- **Review policy:** adaptive and orchestrator-owned — low-risk work uses parent diff inspection; normal-risk work gets one candidate review; high-risk or dependency-defining work gets immediate plus candidate review. `strict`, `final-only`, and `parent-only` are explicit alternatives.
 - **Immediate-review triggers:** public API/schema/shared contract; security/auth/permissions/secrets; money/data-loss/migration; concurrency/distributed behavior; broad cross-cutting diff; weak or missing checks; implementer uncertainty/scope expansion; integration conflict; a task whose contract will be consumed before the next wave review.
-- **Cumulative review:** one `code-reviewer` covers the exact branch-scoped range from `lastReviewedSha` to the pinned reviewed-branch tip; after a clean verdict the boundary advances. One batch fix `implementer` handles the accepted finding list, then the affected range is revalidated and re-reviewed. Every pending change is reviewed before integration or publication.
+- **Candidate review:** review the exact candidate range after accepted lanes are assembled; default to one correction round. Never copy a clean verdict across branches or trees.
 - **Independent code-reviewer:** fresh read-only context, reviews the exact diff range, classifies findings; the orchestrator (not implementer or code-reviewer) owns acceptance and integration.
 
 ## Herdr visibility
 
-Persistent peers (`architecture-peer`, `domain-peer`, `quality-peer`) run as explicitly named, read-only `pi-intercom` sessions in visible Herdr tabs. The `implementer` runs headless through `pi-subagents`; `code-reviewer` is a fresh read-only child; optional inspector tabs attach read-only views. Peers never edit code, commit, integrate, or publish.
+Persistent peers (`architecture-peer`, `domain-peer`, `quality-peer`) run as explicitly named, read-only `pi-intercom` sessions in visible Herdr tabs. The `implementer` runs headless through `pi-subagents`; when the selected policy requires it, `code-reviewer` is a fresh read-only child; optional inspector tabs attach read-only views. Peers never edit code, commit, integrate, or publish.
 
 ## Operations
 
