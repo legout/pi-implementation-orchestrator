@@ -59,7 +59,9 @@ Usage: ./setup.sh [--project PATH|--skip-project]
 
 Modes:
   (default)  resolve choices (explicit flags or questions), validate, preview,
-             ask one approval, then install skills/packages and write project docs
+             ask one approval, then install skills/packages, copy prompt
+             commands to the selected scope's prompt directory, and write
+             project docs
   --inspect  read-only report: detected configuration, unresolved choices,
              validation hazards, and a suggested preview command; never prompts,
              installs, or writes anything (incompatible with --dry-run and --yes)
@@ -689,6 +691,7 @@ validate_dir_target() {
 }
 
 validate_project_outputs() {
+  validate_prompt_outputs
   [ -n "$PROJECT" ] || return 0
   validate_output_file "$INSTRUCTION_FILE" "instruction file"
   validate_managed_block "$PROJECT/$INSTRUCTION_FILE"
@@ -697,6 +700,45 @@ validate_project_outputs() {
   validate_output_file "docs/agents/artifacts.md" "generated artifact-map doc"
   validate_output_file "docs/agents/issue-tracker.md" "generated tracker doc"
   validate_output_file "docs/agents/domain.md" "generated domain doc"
+}
+
+prompt_dest_dir() {
+  if [ "$SKILL_SCOPE" = Project ]; then
+    echo "$PROJECT/.pi/prompts"
+  else
+    echo "$HOME/.pi/agent/prompts"
+  fi
+}
+
+package_prompt_files() {
+  [ -d "$ROOT/prompts" ] || die "package prompts directory not found: $ROOT/prompts (nothing has been modified)"
+  local f
+  for f in "$ROOT"/prompts/*.md; do
+    [ -f "$f" ] || die "no prompt templates found in $ROOT/prompts (nothing has been modified)"
+    echo "$f"
+  done
+}
+
+validate_prompt_outputs() {
+  local dest f base
+  dest=$(prompt_dest_dir)
+  # The prompts directory itself may be a managed symlink (dotfiles setups);
+  # prompt files inside it are never written through a symlink.
+  if [ -e "$dest" ]; then
+    [ -d "$dest" ] || die "prompt-command destination exists and is not a directory: $dest (nothing has been modified)"
+    [ -x "$dest" ] || die "prompt-command destination is not searchable: $dest (nothing has been modified)"
+    [ -w "$dest" ] || die "prompt-command destination is not writable: $dest (nothing has been modified)"
+  else
+    require_creatable "$dest"
+  fi
+  for f in $(package_prompt_files); do
+    base=${f##*/}
+    if [ -e "$dest/$base" ]; then
+      [ ! -L "$dest/$base" ] || die "refusing to write prompt command through a symlink: $dest/$base; resolve it yourself outside setup (nothing has been modified)"
+      [ -f "$dest/$base" ] || die "prompt-command destination exists and is not a regular file: $dest/$base (nothing has been modified)"
+      [ -w "$dest/$base" ] || die "prompt-command file is not writable: $dest/$base (nothing has been modified)"
+    fi
+  done
 }
 
 resolve_custom_doc_decisions() {
@@ -1043,6 +1085,11 @@ print_preview() {
   render_install_lines
   echo
   require_prereqs report
+  echo
+  echo "--- prompt commands (copied to $(prompt_dest_dir)) ---"
+  for pf in $(package_prompt_files); do
+    echo "  ${pf##*/}"
+  done
   if [ -n "$PROJECT" ]; then
     echo
     if [ -f "$inst_doc" ]; then
@@ -1295,6 +1342,20 @@ run_installs() {
   exec_install "$desc npm:pi-intercom" pi install $scope_flag npm:pi-intercom
 }
 
+install_prompts() {
+  local dest f base copied=0
+  dest=$(prompt_dest_dir)
+  # Recheck destination kind after external installs (same boundary as project writes).
+  validate_prompt_outputs
+  mkdir -p "$dest" || die "failed to create prompt-command directory: $dest; rerun setup to converge"
+  for f in $(package_prompt_files); do
+    base=${f##*/}
+    cp "$f" "$dest/$base" || die "failed to install prompt command $base to $dest; rerun setup to converge"
+    copied=$((copied + 1))
+  done
+  echo "Prompt commands installed: $copied file(s) -> $dest"
+}
+
 apply_phase() {
   print_preview
   echo
@@ -1320,6 +1381,7 @@ apply_phase() {
   fi
   run_installs
   POST_INSTALL=true
+  install_prompts
   if [ -n "$PROJECT" ]; then
     write_project_files
   fi
@@ -1400,6 +1462,7 @@ inspect_report() {
     echo "  instruction-file / tracker / domain-layout: not applicable without --project"
   fi
   echo "  skill-scope: ${SKILL_SCOPE:-?} [$SCOPE_STATUS] $SCOPE_NOTE"
+  echo "  prompt-command destination: $(prompt_dest_dir)"
   if [ -n "$PROJECT" ]; then
     echo "Generated docs:"
     if artifacts_doc_requires_replace "$PROJECT/docs/agents/artifacts.md"; then

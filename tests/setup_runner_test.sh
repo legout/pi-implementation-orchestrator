@@ -53,7 +53,7 @@ copy_suite() {
   cp "$ROOT/tests/setup_test.sh" "$dest/tests/setup_test.sh"
   cp "$ROOT/package.json" "$dest/package.json"
   cp "$ROOT/README.md" "$dest/README.md"
-  cp "$ROOT/prompts/setup-implementation-orchestrator.md" "$dest/prompts/"
+  cp "$ROOT/prompts/"*.md "$dest/prompts/"
   cp "$ROOT/docs/design.md" "$dest/docs/"
 }
 

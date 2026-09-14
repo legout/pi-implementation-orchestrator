@@ -58,7 +58,7 @@ Install the repository as a native Git-backed Pi package:
 pi install git:github.com/legout/pi-implementation-orchestrator
 ```
 
-The manifest declares `./prompts`. This install is passive and must not execute setup, install skills or npm packages, or create files in a target project. `pi update git:github.com/legout/pi-implementation-orchestrator` updates it and `pi remove git:github.com/legout/pi-implementation-orchestrator` removes it. Append `@<tag-or-commit>` to pin a Git ref.
+The manifest declares `./prompts`. This install is passive and must not execute setup, install skills or npm packages, or create files in a target project. `pi update git:github.com/legout/pi-implementation-orchestrator` updates it and `pi remove git:github.com/legout/pi-implementation-orchestrator` removes it. Append `@<tag-or-commit>` to pin a Git ref. Explicit setup additionally copies every `prompts/*.md` template into the scope-selected prompt directory (`~/.pi/agent/prompts/` for global scope, the project's `.pi/prompts/` for project scope) so the commands exist even without the package installed; copies are validated (destination kind, writability, no symlinked prompt files) in the shared preflight and are idempotent on rerun.
 
 After installation, invoke `/setup-implementation-orchestrator`. That prompt locates the package's `setup.sh`, asks only unresolved choices, runs one dry-run preview, obtains explicit approval, and invokes the same command once with `--yes` to mutate state. It never edits projects itself.
 

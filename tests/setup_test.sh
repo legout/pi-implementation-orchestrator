@@ -247,6 +247,10 @@ test_installs_pi_packages_and_external_skills() {
   assert_contains "$TEST_CALLS" "pi install npm:pi-subagents"
   assert_contains "$TEST_CALLS" "pi install npm:pi-intercom"
   assert_not_contains "$TEST_CALLS" "skills add $ROOT"
+  assert_file "$HOME/.pi/agent/prompts/setup-implementation-orchestrator.md"
+  assert_file "$HOME/.pi/agent/prompts/implement.md"
+  assert_contains "$HOME/.pi/agent/prompts/implement.md" "orchestrate-implementation"
+  assert_no_file "$TMP/project/.pi/prompts/implement.md"
 }
 
 test_dry_run_writes_nothing() {
@@ -265,6 +269,9 @@ test_dry_run_writes_nothing() {
   assert_contains "$TMP/out" "+ npx skills add legout/skills --skill research"
   assert_contains "$TMP/out" "+ pi install npm:pi-subagents"
   assert_contains "$TMP/out" "docs/agents/issue-tracker.md"
+  assert_contains "$TMP/out" "prompt commands (copied to $TMP/home/.pi/agent/prompts)"
+  assert_contains "$TMP/out" "implement.md"
+  assert_no_file "$HOME/.pi/agent/prompts/implement.md"
   assert_contains "$TMP/out" "Dry run: nothing was installed, executed, or written."
   assert_contains "$TMP/out" "Prerequisites: git ok, npx ok, pi ok, node ok."
 }
@@ -603,6 +610,22 @@ test_skill_scope_project() {
   assert_project_calls "$TMP/project"
   assert_not_contains "$TEST_CALLS" "--global"
   assert_file "$TMP/project/AGENTS.md"
+  assert_file "$TMP/project/.pi/prompts/implement.md"
+  assert_file "$TMP/project/.pi/prompts/setup-implementation-orchestrator.md"
+  assert_no_file "$HOME/.pi/agent/prompts/implement.md"
+}
+
+test_symlinked_prompt_file_refused() {
+  new_case
+  stub_commands
+  mkdir -p "$HOME/.pi/agent/prompts" "$TMP/elsewhere"
+  printf 'custom prompt\n' >"$TMP/elsewhere/implement.md"
+  ln -s "$TMP/elsewhere/implement.md" "$HOME/.pi/agent/prompts/implement.md"
+  out=$("$ROOT/setup.sh" --skip-project --yes 2>&1) && fail "setup accepted a symlinked prompt-command file"
+  printf '%s\n' "$out" >"$TMP/out"
+  assert_contains "$TMP/out" "refusing to write prompt command through a symlink"
+  assert_calls_empty
+  assert_contains "$TMP/elsewhere/implement.md" "custom prompt"
 }
 
 test_single_setup_entrypoint() {
