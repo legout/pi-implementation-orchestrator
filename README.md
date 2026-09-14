@@ -15,7 +15,7 @@ planning skills
   → separate publication authority
 ```
 
-The repository ships: `package.json` (the native Pi manifest), `setup.sh` (the safety-gated installer and project initializer), the `/setup-implementation-orchestrator` prompt, and isolated shell tests. Runtime skills live in [`legout/skills`](https://github.com/legout/skills) and are installed by `setup.sh`. `pi-subagents` owns child lifecycle (fresh contexts, managed worktrees, missions, artifacts, review, recovery); `pi-intercom` is limited to named persistent read-only peers.
+The repository ships: `package.json` (the native Pi manifest), `setup.sh` (the safety-gated installer and project initializer), the `/setup-implementation-orchestrator` prompt, the lifecycle prompts (`/research`, `/shape`, `/plan`, `/implement`, `/integrate`, `/release`), and isolated shell tests. Runtime skills live in [`legout/skills`](https://github.com/legout/skills) and are installed by `setup.sh`. `pi-subagents` owns child lifecycle (fresh contexts, managed worktrees, missions, artifacts, review, recovery); `pi-intercom` is limited to named persistent read-only peers.
 
 ## Prerequisites
 
@@ -80,7 +80,7 @@ Additional `legout/skills` entries you can add manually: `capture-project-vision
 
 ## Workflows
 
-You drive intent and approvals; the skills carry the mechanics. Three layers make that work: the generated `AGENTS.md` block routes each request to the right skill, installed skill descriptions auto-load the matching skill when your request fits (no `/skill:` call needed — that just forces it), and each `SKILL.md` holds the actual procedure. You never need to know the workflow internals — phrase the intent and answer the approval gates.
+You drive intent and approvals; the skills carry the mechanics. Three layers make that work: the generated `AGENTS.md` block routes each request to the right skill, installed skill descriptions auto-load the matching skill when your request fits (no `/skill:` call needed — that just forces it), and each `SKILL.md` holds the actual procedure. You never need to know the workflow internals — phrase the intent and answer the approval gates. Each lifecycle step also has a prompt shortcut: `/research <question>`, `/shape <feature>`, `/plan <spec>`, `/implement`, `/integrate`, `/release`. A shortcut only force-loads the matching skill and passes your arguments through — the skill stays the single source of procedure; if the skill is missing, the shortcut points to `/setup-implementation-orchestrator` instead of improvising.
 
 A typical feature lifecycle:
 
@@ -186,6 +186,9 @@ for f in setup.sh tests/setup_test.sh tests/setup_runner_test.sh; do
 done
 bash tests/setup_test.sh
 bash tests/setup_runner_test.sh
+for p in setup-implementation-orchestrator research shape plan implement integrate release; do
+  test -f "prompts/$p.md" || exit 1
+done
 node -e 'const p=require("./package.json"); \
   if (!p.pi.prompts.includes("./prompts") || p.pi.skills) process.exit(1)'
 git diff --check

@@ -40,7 +40,9 @@ pi-implementation-orchestrator/
 ├── LICENSE
 ├── package.json                 # native Pi package manifest
 ├── setup.sh                     # explicit dependency/project setup
-├── prompts/setup-implementation-orchestrator.md
+├── prompts/          # setup-implementation-orchestrator + lifecycle shortcuts
+│   # research, shape, plan, implement, integrate, release — thin skill
+│   # force-loaders; the skills stay the single source of procedure
 ├── tests/setup_test.sh
 ├── tests/setup_runner_test.sh
 └── docs/design.md
