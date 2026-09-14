@@ -11,7 +11,7 @@ Prove the shipped `orchestrate-implementation` recovery contract through the nat
 - Archived source plan: [`2026-09-07-orchestrator-skill-contracts.md`](archive/2026-09-07-orchestrator-skill-contracts.md), especially former Task S2.
 - Runtime fixture: `../../skills/skills/workflow/orchestrate-implementation/evals/fixtures/managed-lifecycle.md`.
 - Target skill revision: `../../skills` `main` at `57d3a7e`.
-- Required agents: preflight capability discovery, one native `implementer`, and fresh read-only `code-reviewer` review.
+- Required agents: preflight capability discovery, one builtin `worker`, and fresh read-only builtin `reviewer` review.
 - All Git refs, worktrees, patches, and artifacts must stay inside a disposable temporary repository.
 
 ## Procedure

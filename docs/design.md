@@ -2,7 +2,7 @@
 
 ## Goal
 
-Publish a safe Pi installer and setup prompt for implementation-orchestration and planning skills maintained in `legout/skills`, a preconfigured `implementer`/`code-reviewer` pair with risk-based validation and proportional review, native Pi subagents, optional persistent intercom peers, and interactive project setup.
+Publish a safe Pi installer and setup prompt for implementation-orchestration and planning skills maintained in `legout/skills`, using the builtin pi-subagents `worker`/`reviewer` pair with risk-based validation and proportional review, optional persistent intercom peers, and interactive project setup.
 
 ## Repository
 
@@ -22,7 +22,7 @@ Native package installation is passive: Pi loads the declared `prompts/` resourc
 planning skills
   → ADRs, specifications, tickets, and plans
   → orchestrate-implementation
-  → preconfigured `implementer` in managed worktrees
+  → builtin `worker` in managed worktrees
   → focused validation
   → proportional parent/reviewer checks
   → orchestrator-owned integration
@@ -89,12 +89,12 @@ Install exactly this set from `legout/skills`; no other upstream skill repositor
 - `prototype-question` — disposable spikes; `shape-design` hands feasibility questions to it.
 - `verification-before-completion` — evidence-before-claims discipline for the implementer.
 - `systematic-debugging` — reproduction and root-cause method for failing checks.
-- `orchestrate-implementation` — implementer/code-reviewer orchestration; carries the TDD/test-seam guidance for `new-test` validation units.
+- `orchestrate-implementation` — worker/reviewer orchestration; carries the TDD/test-seam guidance for `new-test` validation units.
 - `merge-worktree` — worktree integration; resolves conflicts inline from source intent.
 - `make-release` — release publication.
 - `planning-contract` — shared planning artifact and handoff contract (classification defaults, capture checkpoint, approval/readiness rules, missing-contract refusal) consumed by the planning skills above; installed explicitly alongside them because the skills CLI does not resolve dependencies.
 
-The `implementer` gets TDD discipline through `orchestrate-implementation`; when the selected review policy requires it, the orchestrator supplies a fresh read-only `code-reviewer`. Setup consumes these existing profiles and does not create or override their model/tool configuration. If a preferred profile is unavailable, the owner must approve a fallback to builtin `worker`/`reviewer`, and the resolved names must be recorded in the run manifest. Additional `legout/skills` entries (`capture-project-vision`, `doc-coauthoring`, `simplify-code`, `review-codebase-architecture`) are available but not installed by default.
+The builtin `worker` gets TDD discipline through `orchestrate-implementation`; when the selected review policy requires it, the orchestrator supplies a fresh read-only builtin `reviewer`. Setup uses the profiles shipped by `pi-subagents` and does not create or override their model/tool configuration. Confirm both are executable before dispatch and record the resolved names in the run manifest. Additional `legout/skills` entries (`capture-project-vision`, `doc-coauthoring`, `simplify-code`, `review-codebase-architecture`) are available but not installed by default.
 
 ## Upstream Installation
 
@@ -147,7 +147,7 @@ If one of `CLAUDE.md` or `AGENTS.md` already exists, update that file. If both e
 Write or update one marked workflow block that documents:
 
 - risk-based validation-unit obligations (`new-test`, `existing-check`, `no-new-test`);
-- preferred preconfigured `implementer` and `code-reviewer` roles, with explicit fallback approval;
+- builtin `worker` and `reviewer` routing, with executable-profile preflight;
 - adaptive orchestrator-owned review;
 - routing and authority rules (which skill handles which decision — including loading the shared `planning-contract` skill and the `docs/agents/artifacts.md` mapping — `supervised` default with explicit integration/publication gates, one writer per worktree, evidence discipline, merge/release authority);
 - a layout-aware documentation map — single-context references canonical root `CONTEXT.md`; multi-context references per-context glossaries and an optional `CONTEXT-MAP.md` and never declares a root `CONTEXT.md` canonical;
