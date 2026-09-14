@@ -93,6 +93,41 @@ A bounded change collapses this: an approved issue with acceptance criteria goes
 
 - **During execution:** `implementer` applies `systematic-debugging` to failing checks and `verification-before-completion` before claiming done; the orchestrator supplies independent review when the selected policy requires it.
 
+### Typical runs
+
+**Greenfield — brand-new project, first feature:**
+
+```text
+pi install git:github.com/legout/pi-implementation-orchestrator   # once per machine
+git init my-project && cd my-project
+/setup-implementation-orchestrator    # inspect → choices → dry-run preview → approval
+/research <open technical questions>  # optional; findings land in docs/research/
+/shape <first feature>                # interviews → capture checkpoint → spec in docs/specs/
+/plan <approved spec>                 # tracer-bullet slices in docs/plans/; you approve it
+/implement                            # readiness check → implementer worktrees → pause before integration
+/integrate                            # local merge on an isolated branch; never pushes
+/release patch                        # approved release plan → tag + GitHub Release
+```
+
+On a fresh repository expect the single-context layout: `CONTEXT.md` appears lazily when shaping resolves the first domain term, and ADRs come only from genuinely costly decisions. Repeat `/shape → /plan → /implement → /integrate` per feature; the installed stack and managed block stay.
+
+**Brownfield — existing repository:**
+
+```text
+cd existing-repo
+/setup-implementation-orchestrator    # detects existing config/docs; preserves everything outside the markers byte-for-byte
+# bounded change — an approved issue with acceptance criteria:
+/implement <issue>                    # straight to lanes; no spec, plan, or tickets
+# larger feature:
+/research <how the current code handles X>
+/shape <feature>                      # reconciles with existing glossaries/ADRs; conflicts stop work
+/plan <approved spec>
+/implement
+/integrate                            # /release when you are ready to publish
+```
+
+Setup maps what already exists — glossaries, tracker, multi-context layouts — instead of moving or fabricating documents. Existing `AGENTS.md`/`CLAUDE.md` content survives untouched around the managed block, and authoritative-source conflicts stop before implementation.
+
 ### Plans vs. tickets
 
 Plans and tickets must reference their exact feature sources (ADR, specification, or issue). The orchestrator normalizes different plan formats with a read-only scout and never rewrites your planning documents.
