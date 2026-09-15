@@ -545,6 +545,16 @@ test_adaptive_review_and_test_policy() {
   printf '1\n1\n1\ny\n' | "$ROOT/setup.sh" --project "$TMP/project" >/dev/null 2>&1
   assert_contains "$TMP/project/AGENTS.md" 'Every validation unit receives one test obligation: `new-test`, `existing-check`, or `no-new-test`; related tasks may share a validation unit, and focused TDD is required only for `new-test` work.'
   assert_contains "$TMP/project/AGENTS.md" 'Review is adaptive and orchestrator-owned: low-risk work uses parent diff inspection; normal-risk work gets one candidate review; high-risk or dependency-defining work gets immediate plus candidate review.'
+  for rule in 'agreed feature, then correctness, then proven risk' \
+    'named requirement or written rule' 'caused or worsened' \
+    'named asset, realistic attacker' 'security: n/a' 'unverified' \
+    'stolen secrets, broken TLS, malicious admins' \
+    'Test requests are findings' 'Coverage percentage' \
+    'Disposition before repair' 'One fix pass, one delta recheck' \
+    'pass or fix-first' 'accept / fix / hand back / ask' \
+    'Paste the full reviewer contract'; do
+    assert_contains "$TMP/project/AGENTS.md" "$rule"
+  done
 }
 
 test_routing_authority_block() {
@@ -570,11 +580,11 @@ test_routing_authority_block() {
   assert_contains "$block" 'Use `merge-worktree` for target integration'
   assert_contains "$block" 'Local integration does not authorize pushing; opening a PR does not authorize merging'
   assert_contains "$block" 'Never silently switch execution modes to bypass a blocker.'
-  # the whole managed block stays under the ~500-word budget
+  # Keep routing plus the inline guardrails bounded (formerly routing-only ~500).
   local words
   words=$(extract_block "$block" | wc -w | tr -d ' ')
-  if [ "$words" -gt 500 ]; then
-    fail "managed block is $words words (budget ~500)"
+  if [ "$words" -gt 700 ]; then
+    fail "managed block is $words words (budget ~700)"
   fi
 }
 
