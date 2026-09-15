@@ -626,6 +626,73 @@ test_skill_scope_project() {
   assert_no_file "$HOME/.pi/agent/prompts/implement.md"
 }
 
+real_node_stub() {
+  # Replace the no-op node stub with a wrapper around the real node.
+  [ -n "$NODE" ] || {
+    echo "node not available"
+    exit 1
+  }
+  cat >"$TMP/bin/node" <<STUB
+#!/usr/bin/env bash
+exec "$NODE" "\$@"
+STUB
+  chmod +x "$TMP/bin/node"
+}
+
+seed_global_subagent_settings() {
+  mkdir -p "$HOME/.pi/agent"
+  cat >"$HOME/.pi/agent/settings.json" <<'EOF'
+{
+  "subagents": {
+    "agentOverrides": {
+      "worker": { "model": "zai/glm-5.3-flash", "thinking": "high" },
+      "reviewer": { "model": "kimi-coding/k3", "thinking": "high" }
+    }
+  }
+}
+EOF
+}
+
+test_project_scope_merges_global_models() {
+  new_case
+  stub_commands
+  real_node_stub
+  seed_global_subagent_settings
+  mkdir -p "$TMP/project/.pi"
+  cat >"$TMP/project/.pi/settings.json" <<'EOF'
+{
+  "packages": ["npm:pi-subagents", "npm:pi-intercom"],
+  "subagents": { "agentOverrides": { "worker": { "tools": "inherit" } } }
+}
+EOF
+  "$ROOT/setup.sh" --project "$TMP/project" --skill-scope project --yes \
+    --instruction-file AGENTS.md --tracker local --domain-layout single \
+    </dev/null >"$TMP/out" 2>&1
+  assert_contains "$TMP/out" 'copied global worker.model'
+  "$NODE" -e '
+    const s = require(process.argv[1]);
+    const w = s.subagents.agentOverrides.worker;
+    if (w.model !== "zai/glm-5.3-flash" || w.thinking !== "high" || w.tools !== "inherit")
+      throw new Error("worker override not merged: " + JSON.stringify(w));
+    if (s.subagents.agentOverrides.reviewer)
+      throw new Error("absent reviewer override must not be fabricated");
+  ' "$TMP/project/.pi/settings.json" || fail "merged .pi/settings.json wrong"
+  assert_contains "$TMP/out" 'worker: zai/glm-5.3-flash'
+  assert_contains "$TMP/out" 'reviewer: kimi-coding/k3'
+  assert_contains "$TMP/out" '/subagents'
+}
+
+test_overview_reports_models() {
+  new_case
+  stub_commands
+  real_node_stub
+  seed_global_subagent_settings
+  "$ROOT/setup.sh" --skip-project --yes </dev/null >"$TMP/out" 2>&1
+  assert_contains "$TMP/out" 'worker: zai/glm-5.3-flash'
+  assert_contains "$TMP/out" 'reviewer: kimi-coding/k3'
+  assert_contains "$TMP/out" '/subagents'
+}
+
 test_symlinked_prompt_file_refused() {
   new_case
   stub_commands

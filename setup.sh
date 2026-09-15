@@ -804,9 +804,74 @@ render_install_lines() {
   if [ "$SKILL_SCOPE" = Project ]; then
     printf '+ (cd %q && pi install --local npm:pi-subagents)\n' "$PROJECT"
     printf '+ (cd %q && pi install --local npm:pi-intercom)\n' "$PROJECT"
+    printf '%s\n' '+ merge global subagent model/thinking settings into .pi/settings.json (fills missing fields only; never overwrites project choices)'
   else
     printf '%s\n' '+ pi install npm:pi-subagents' '+ pi install npm:pi-intercom'
   fi
+}
+
+# A project .pi/settings.json subagents.agentOverrides.<name> object replaces the
+# global one wholesale; an entry like {"tools":"inherit"} would silently drop the
+# globally configured model. Fill missing fields from the global settings.
+harmonize_subagent_models() {
+  [ "$SKILL_SCOPE" = Project ] || return 0
+  local settings="$PROJECT/.pi/settings.json" user="$HOME/.pi/agent/settings.json"
+  [ -f "$settings" ] || return 0
+  [ -f "$user" ] || return 0
+  node - "$user" "$settings" <<'EOF' || die "failed to merge subagent model settings into $settings; fix its JSON and rerun setup to converge"
+const fs = require('fs');
+const [userPath, projectPath] = process.argv.slice(2);
+const user = JSON.parse(fs.readFileSync(userPath, 'utf8'));
+const project = JSON.parse(fs.readFileSync(projectPath, 'utf8'));
+const globalOverrides = user.subagents?.agentOverrides;
+const projectOverrides = project.subagents?.agentOverrides;
+if (!globalOverrides || !projectOverrides) process.exit(0);
+const filled = [];
+for (const [name, override] of Object.entries(projectOverrides)) {
+  const global = globalOverrides[name];
+  if (!global || typeof global !== 'object' || !override || typeof override !== 'object') continue;
+  for (const [key, value] of Object.entries(global)) {
+    if (!(key in override)) { override[key] = value; filled.push(`${name}.${key}`); }
+  }
+}
+if (filled.length) {
+  fs.writeFileSync(projectPath, JSON.stringify(project, null, 2) + '\n');
+  console.log(`Subagent settings: copied global ${filled.join(', ')} into .pi/settings.json`);
+}
+EOF
+}
+
+resolve_agent_models() {
+  # prints NAME<TAB>MODEL<TAB>THINKING<TAB>SOURCE per line for worker and reviewer
+  local project_settings=""
+  [ -n "$PROJECT" ] && project_settings="$PROJECT/.pi/settings.json"
+  node - "$project_settings" "$HOME/.pi/agent/settings.json" <<'EOF'
+const fs = require('fs');
+const [projectPath, userPath] = process.argv.slice(2);
+const read = p => { try { return p ? JSON.parse(fs.readFileSync(p, 'utf8')) : {}; } catch { return {}; } };
+const project = read(projectPath);
+const user = read(userPath);
+for (const name of ['worker', 'reviewer']) {
+  const po = project.subagents?.agentOverrides?.[name];
+  const uo = user.subagents?.agentOverrides?.[name];
+  const active = po ?? uo;
+  console.log([
+    name,
+    active?.model ?? 'inherits parent model',
+    active?.thinking ?? 'default',
+    po ? 'project .pi/settings.json' : uo ? '~/.pi/agent/settings.json' : 'builtin default',
+  ].join('\t'));
+}
+EOF
+}
+
+print_setup_overview() {
+  echo
+  echo "Subagent models in effect:"
+  resolve_agent_models | while IFS=$(printf '\t') read -r name model thinking source; do
+    printf '  %s: %s (thinking: %s) — %s\n' "$name" "$model" "$thinking" "$source"
+  done
+  echo "Change them in the project .pi/settings.json, globally in ~/.pi/agent/settings.json (subagents.agentOverrides.<name>), or with /subagents inside pi."
 }
 
 require_prereqs() {
@@ -1393,6 +1458,7 @@ apply_phase() {
   run_installs
   POST_INSTALL=true
   install_prompts
+  harmonize_subagent_models
   if [ -n "$PROJECT" ]; then
     write_project_files
   fi
@@ -1405,6 +1471,7 @@ apply_phase() {
     echo "  docs/agents/issue-tracker.md: ${T_ACTION[2]:-written}"
     echo "  docs/agents/domain.md: ${T_ACTION[3]:-written}"
   fi
+  print_setup_overview
 }
 
 suggested_command() {
