@@ -1,0 +1,9 @@
+# Changelog
+
+## Unreleased
+
+## 0.2.0 - 2026-09-15
+
+- Project-scope setup fills missing `model`/`thinking` fields in `.pi/settings.json` `subagents.agentOverrides` from the global `~/.pi/agent/settings.json`, so a partial project override (e.g. `{"tools":"inherit"}`) no longer shadows the configured worker model.
+- Every apply ends with an overview of the effective `worker`/`reviewer` models, their source, and where to change them (project `.pi/settings.json`, global `~/.pi/agent/settings.json`, or `/subagents` inside pi).
+- Documentation and the generated instruction block now reflect the current `legout/skills` proportional assurance policy: validation-unit obligations, tracer-bullet slices, and low/normal/high-risk review mapping.

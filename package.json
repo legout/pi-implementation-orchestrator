@@ -1,11 +1,15 @@
 {
   "name": "pi-implementation-orchestrator",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Plan with selected skills and execute with pi-subagents worker and reviewer profiles.",
   "license": "MIT",
   "repository": "https://github.com/legout/pi-implementation-orchestrator",
-  "keywords": ["pi-package"],
+  "keywords": [
+    "pi-package"
+  ],
   "pi": {
-    "prompts": ["./prompts"]
+    "prompts": [
+      "./prompts"
+    ]
   }
 }
