@@ -8,6 +8,7 @@ END_MARKER='<!-- pi-implementation-orchestrator:end -->'
 LEGOUT_SKILLS=(research shape-design grilling domain-modeling write-implementation-plan prototype-question verification-before-completion systematic-debugging orchestrate-implementation merge-worktree make-release planning-contract)
 
 MODE=apply
+OPERATION=install
 INSPECT=false
 DRY_RUN_MODE=false
 ASSUME_YES=false
@@ -23,6 +24,11 @@ TRACKER_CHOICE=auto
 TRACKER_DESCRIPTION=
 DOMAIN_LAYOUT_CHOICE=auto
 SKILL_SCOPE_CHOICE=auto
+WORKER_MODEL_CHOICE=keep
+REVIEWER_MODEL_CHOICE=keep
+WORKER_THINKING_CHOICE=keep
+REVIEWER_THINKING_CHOICE=keep
+MODEL_FLAGS_EXPLICIT=false
 
 INSTRUCTION_FILE=
 INSTRUCTION_STATUS=
@@ -40,17 +46,35 @@ MCP_CONFIG_SIG=
 MCP_CONFIG_MODE=
 MCP_CONFIG_ACTION=
 MCP_SYMLINK_PATH=
+PROJECT_NS=project
+NS_AGENTS=
+NS_ARTIFACTS=
+NS_TRACKER=
+NS_DOMAIN=
+NS_RESEARCH=
+NS_ADR=
+NS_SPECS=
+NS_PLANS=
+NS_TICKETS=
 DOMAIN_LAYOUT=
 LAYOUT_STATUS=
 LAYOUT_NOTE=
 SKILL_SCOPE=
 SCOPE_STATUS=
 SCOPE_NOTE=
+SUBAGENT_SETTINGS_PATH=
 PREREQS_OK=true
 POST_INSTALL=false
 SYMLINK_PATH=
 
 SKILL_ARGS=()
+UPDATE_SKILLS=()
+UPDATE_PI_PACKAGES=()
+UPDATE_SKILL_MISSING=()
+UPDATE_PI_MISSING=()
+UPDATE_PINNED=()
+_UPDATE_STATUS=
+_UPDATE_NOTE=
 STEPS_DONE=
 ORCH_WORK=
 T_REL=()
@@ -65,7 +89,11 @@ Usage: ./setup.sh [--project PATH|--skip-project]
             [--instruction-file auto|AGENTS.md|CLAUDE.md] [--tracker auto|github|epiq|local|other]
             [--tracker-description TEXT] [--domain-layout auto|single|multi]
             [--skill-scope auto|global|project]
-            [--inspect] [--dry-run] [--yes] [--replace-custom]
+            [--worker-model keep|inherit|PROVIDER/MODEL]
+            [--reviewer-model keep|inherit|PROVIDER/MODEL]
+            [--worker-thinking keep|inherit|off|minimal|low|medium|high|xhigh|max]
+            [--reviewer-thinking keep|inherit|off|minimal|low|medium|high|xhigh|max]
+            [--update] [--inspect] [--dry-run] [--yes] [--replace-custom]
 
 Modes:
   (default)  resolve choices (explicit flags or questions), validate, preview,
@@ -77,10 +105,16 @@ Modes:
              installs, or writes anything (incompatible with --dry-run and --yes)
   --dry-run  resolve and validate choices, print the complete preview; install
              and write nothing, never run external installers
+  --update   require an existing installation at the selected scope, update only
+             its managed skills/packages, and refresh changed managed files;
+             missing dependencies are reported but not installed
   --replace-custom  explicitly allow replacing unrecognized generated-doc
              content; combine with --yes for noninteractive apply
   --yes      noninteractive approval AFTER validation and preview; skips only the
              final confirmation question, never validation
+
+Subagent model choices default to keep. Existing worker/reviewer override fields
+are never changed unless a model or thinking flag explicitly requests it.
 
 Nothing is installed and no project file is written before approval. Declining
 or closing input aborts with zero side effects. Symlinked instruction files,
@@ -126,6 +160,10 @@ parse_args() {
       DRY_RUN_MODE=true
       shift
       ;;
+    --update)
+      OPERATION=update
+      shift
+      ;;
     --yes)
       ASSUME_YES=true
       shift
@@ -157,6 +195,30 @@ parse_args() {
     --skill-scope)
       [ $# -ge 2 ] || bad_usage "--skill-scope requires a value"
       SKILL_SCOPE_CHOICE=${2-}
+      shift 2
+      ;;
+    --worker-model)
+      [ $# -ge 2 ] || bad_usage "--worker-model requires a value"
+      WORKER_MODEL_CHOICE=${2-}
+      MODEL_FLAGS_EXPLICIT=true
+      shift 2
+      ;;
+    --reviewer-model)
+      [ $# -ge 2 ] || bad_usage "--reviewer-model requires a value"
+      REVIEWER_MODEL_CHOICE=${2-}
+      MODEL_FLAGS_EXPLICIT=true
+      shift 2
+      ;;
+    --worker-thinking)
+      [ $# -ge 2 ] || bad_usage "--worker-thinking requires a value"
+      WORKER_THINKING_CHOICE=${2-}
+      MODEL_FLAGS_EXPLICIT=true
+      shift 2
+      ;;
+    --reviewer-thinking)
+      [ $# -ge 2 ] || bad_usage "--reviewer-thinking requires a value"
+      REVIEWER_THINKING_CHOICE=${2-}
+      MODEL_FLAGS_EXPLICIT=true
       shift 2
       ;;
     -h | --help)
@@ -224,6 +286,28 @@ resolve_project() {
   local abs
   abs=$(cd "$PROJECT" 2>/dev/null && pwd -P) || die "project directory not found: $PROJECT"
   PROJECT=$abs
+}
+
+# Legacy installations keep the docs/ artifact namespace; new installations
+# use project/ so delivery artifacts never collide with product documentation.
+# Any existing legacy artifact directory keeps the whole project on docs/.
+resolve_project_namespace() {
+  PROJECT_NS=project
+  local rel
+  for rel in docs/agents docs/research docs/adr docs/specs docs/plans docs/tickets; do
+    if [ -e "$PROJECT/$rel" ] || [ -L "$PROJECT/$rel" ]; then
+      PROJECT_NS=docs
+    fi
+  done
+  NS_AGENTS="$PROJECT_NS/agents"
+  NS_ARTIFACTS="$NS_AGENTS/artifacts.md"
+  NS_TRACKER="$NS_AGENTS/issue-tracker.md"
+  NS_DOMAIN="$NS_AGENTS/domain.md"
+  NS_RESEARCH="$PROJECT_NS/research/"
+  NS_ADR="$PROJECT_NS/adr/"
+  NS_SPECS="$PROJECT_NS/specs/"
+  NS_PLANS="$PROJECT_NS/plans/"
+  NS_TICKETS="$PROJECT_NS/tickets/"
 }
 
 ask_choice() {
@@ -379,7 +463,7 @@ detect_instruction_file() {
 }
 
 detect_tracker() {
-  [ -n "$PROJECT" ] && refuse_symlink_ancestors "docs/agents/issue-tracker.md"
+  [ -n "$PROJECT" ] && refuse_symlink_ancestors "$NS_TRACKER"
   case "$TRACKER_CHOICE" in
   github)
     TRACKER="GitHub Issues"
@@ -407,7 +491,7 @@ detect_tracker() {
     return
     ;;
   esac
-  local doc="$PROJECT/docs/agents/issue-tracker.md" label
+  local doc="$PROJECT/$NS_TRACKER" label
   if [ -f "$doc" ]; then
     label=$(tracker_doc_label "$doc")
     if [ -n "$label" ]; then
@@ -415,12 +499,12 @@ detect_tracker() {
       TRACKER_DESCRIPTION=$label
       [ "$label" = "Epiq" ] && TRACKER_PROFILE=epiq
       TRACKER_STATUS=detected
-      TRACKER_NOTE="(existing docs/agents/issue-tracker.md)"
+      TRACKER_NOTE="(existing $NS_TRACKER)"
       return
     fi
     TRACKER="GitHub Issues"
     TRACKER_STATUS=unresolved
-    TRACKER_NOTE="UNRESOLVED: docs/agents/issue-tracker.md has unrecognized custom content; an explicit replace decision is required"
+    TRACKER_NOTE="UNRESOLVED: $NS_TRACKER has unrecognized custom content; an explicit replace decision is required"
     return
   fi
   local url
@@ -437,7 +521,7 @@ detect_tracker() {
 }
 
 detect_domain_layout() {
-  [ -n "$PROJECT" ] && refuse_symlink_ancestors "docs/agents/domain.md"
+  [ -n "$PROJECT" ] && refuse_symlink_ancestors "$NS_DOMAIN"
   case "$DOMAIN_LAYOUT_CHOICE" in
   single)
     DOMAIN_LAYOUT="Single context"
@@ -452,7 +536,7 @@ detect_domain_layout() {
     return
     ;;
   esac
-  local doc="$PROJECT/docs/agents/domain.md" layout
+  local doc="$PROJECT/$NS_DOMAIN" layout
   if [ -f "$doc" ]; then
     layout=$(layout_doc_label "$doc")
     if [ -n "$layout" ]; then
@@ -462,12 +546,12 @@ detect_domain_layout() {
         DOMAIN_LAYOUT="Single context"
       fi
       LAYOUT_STATUS=detected
-      LAYOUT_NOTE="(existing docs/agents/domain.md)"
+      LAYOUT_NOTE="(existing $NS_DOMAIN)"
       return
     fi
     DOMAIN_LAYOUT="Single context"
     LAYOUT_STATUS=unresolved
-    LAYOUT_NOTE="UNRESOLVED: docs/agents/domain.md has unrecognized custom content; an explicit replace decision is required"
+    LAYOUT_NOTE="UNRESOLVED: $NS_DOMAIN has unrecognized custom content; an explicit replace decision is required"
     return
   fi
   if has_monorepo_signals; then
@@ -622,8 +706,171 @@ resolve_mcp_config() {
   validate_mcp_config
 }
 
+model_update_requested() {
+  [ "$WORKER_MODEL_CHOICE" != keep ] ||
+    [ "$REVIEWER_MODEL_CHOICE" != keep ] ||
+    [ "$WORKER_THINKING_CHOICE" != keep ] ||
+    [ "$REVIEWER_THINKING_CHOICE" != keep ]
+}
+
+validate_model_choice() {
+  case "$2" in
+  keep | inherit) ;;
+  ?*/?*)
+    case "$2" in
+    *[[:space:]]*) bad_usage "$1 must not contain whitespace" ;;
+    esac
+    ;;
+  *) bad_usage "$1 must be keep, inherit, or PROVIDER/MODEL" ;;
+  esac
+}
+
+validate_thinking_choice() {
+  case "$2" in
+  keep | inherit | off | minimal | low | medium | high | xhigh | max) ;;
+  *) bad_usage "$1 must be keep, inherit, off, minimal, low, medium, high, xhigh, or max" ;;
+  esac
+}
+
+resolve_subagent_settings() {
+  local settings
+  validate_model_choice --worker-model "$WORKER_MODEL_CHOICE"
+  validate_model_choice --reviewer-model "$REVIEWER_MODEL_CHOICE"
+  validate_thinking_choice --worker-thinking "$WORKER_THINKING_CHOICE"
+  validate_thinking_choice --reviewer-thinking "$REVIEWER_THINKING_CHOICE"
+  if [ "$SKILL_SCOPE" = Project ]; then
+    SUBAGENT_SETTINGS_PATH="$PROJECT/.pi/settings.json"
+  else
+    SUBAGENT_SETTINGS_PATH="$HOME/.pi/agent/settings.json"
+  fi
+  if model_update_requested; then
+    if [ "$SKILL_SCOPE" = Project ]; then
+      refuse_symlink_ancestors ".pi/settings.json"
+    else
+      if mcp_config_has_symlink_ancestor "$SUBAGENT_SETTINGS_PATH"; then
+        die "refusing to update Pi settings through the symlink: $MCP_SYMLINK_PATH (nothing has been modified)"
+      fi
+    fi
+    if [ -e "$SUBAGENT_SETTINGS_PATH" ]; then
+      [ -f "$SUBAGENT_SETTINGS_PATH" ] || die "Pi settings exist and are not a regular file: $SUBAGENT_SETTINGS_PATH (nothing has been modified)"
+      [ -w "$SUBAGENT_SETTINGS_PATH" ] || die "Pi settings are not writable: $SUBAGENT_SETTINGS_PATH (nothing has been modified)"
+    else
+      require_creatable "$SUBAGENT_SETTINGS_PATH"
+    fi
+    if command -v node >/dev/null 2>&1; then
+      for settings in "$HOME/.pi/agent/settings.json" "$SUBAGENT_SETTINGS_PATH"; do
+        [ -f "$settings" ] || continue
+        node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))' "$settings" >/dev/null 2>&1 ||
+          die "cannot update invalid Pi settings JSON: $settings (nothing has been modified)"
+      done
+    fi
+  fi
+}
+
+resolve_update_plan() {
+  [ "$OPERATION" = update ] || return 0
+  UPDATE_SKILLS=()
+  UPDATE_PI_PACKAGES=()
+  UPDATE_SKILL_MISSING=()
+  UPDATE_PI_MISSING=()
+  UPDATE_PINNED=()
+  _UPDATE_STATUS=unavailable
+  _UPDATE_NOTE="(node is required to inspect installation metadata)"
+  command -v node >/dev/null 2>&1 || return 0
+
+  local project_lock_v3="" project_lock_v1="" project_lock_legacy="" project_settings="" output kind name
+  if [ -n "$PROJECT" ]; then
+    project_lock_v3="$PROJECT/.agents/.skill-lock.json"
+    project_lock_v1="$PROJECT/.agents/skills/skills-lock.json"
+    project_lock_legacy="$PROJECT/skills-lock.json"
+    project_settings="$PROJECT/.pi/settings.json"
+  fi
+  output=$(
+    node - "$SKILL_SCOPE" "$HOME/.agents/.skill-lock.json" "$HOME/.agents/skills/skills-lock.json" \
+      "$project_lock_v3" "$project_lock_v1" "$project_lock_legacy" \
+      "$HOME/.pi/agent/settings.json" "$project_settings" "$TRACKER_PROFILE" \
+      "${LEGOUT_SKILLS[*]}" <<'EOF'
+const fs = require('fs');
+const [scope, globalLockV3, globalLockV1, projectLockV3, projectLockV1, projectLockLegacy,
+  globalSettingsPath, projectSettingsPath, trackerProfile, skillList] = process.argv.slice(2);
+const read = file => {
+  if (!file || !fs.existsSync(file)) return {};
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+};
+const first = files => files.find(file => file && fs.existsSync(file));
+const lockPath = scope === 'Project'
+  ? first([projectLockV3, projectLockV1, projectLockLegacy])
+  : first([globalLockV3, globalLockV1]);
+const installedSkills = read(lockPath).skills ?? {};
+for (const name of skillList.split(' ')) {
+  const installed = installedSkills[name];
+  if (!installed) console.log(`skill-missing\t${name}`);
+  else if (installed.source !== 'legout/skills') console.log(`skill-conflict\t${name}:${installed.source ?? 'unknown source'}`);
+  else console.log(`skill-update\t${name}`);
+}
+
+const sourceOf = entry => typeof entry === 'string' ? entry : entry?.source;
+const packagesOf = file => (read(file).packages ?? []).map(sourceOf).filter(Boolean);
+const globalPackages = packagesOf(globalSettingsPath);
+const projectPackages = packagesOf(projectSettingsPath);
+const selected = scope === 'Project' ? projectPackages : globalPackages;
+const other = scope === 'Project' ? globalPackages : projectPackages;
+const matching = (sources, name) => sources.filter(source => source === `npm:${name}` || source.startsWith(`npm:${name}@`));
+const desired = ['pi-subagents', 'pi-intercom'];
+if (trackerProfile === 'epiq' || matching(selected, 'pi-mcp-adapter').length) desired.push('pi-mcp-adapter');
+for (const name of desired) {
+  const configured = matching(selected, name);
+  if (!configured.length) {
+    console.log(`package-missing\tnpm:${name}`);
+    continue;
+  }
+  if (matching(other, name).length) {
+    console.log(`package-duplicate\tnpm:${name}`);
+    continue;
+  }
+  if (configured.every(source => source !== `npm:${name}`)) console.log(`package-pinned\t${configured[0]}`);
+  else console.log(`package-update\tnpm:${name}`);
+}
+EOF
+  ) || die "cannot inspect existing installation metadata; fix invalid skill lock or Pi settings JSON (nothing has been modified)"
+
+  while IFS=$(printf '\t') read -r kind name; do
+    [ -n "$kind" ] || continue
+    case "$kind" in
+    skill-update) UPDATE_SKILLS+=("$name") ;;
+    skill-missing) UPDATE_SKILL_MISSING+=("$name") ;;
+    skill-conflict) die "managed skill source conflict: $name; use normal setup to replace it deliberately (nothing has been modified)" ;;
+    package-update) UPDATE_PI_PACKAGES+=("$name") ;;
+    package-missing) UPDATE_PI_MISSING+=("$name") ;;
+    package-pinned) UPDATE_PINNED+=("$name") ;;
+    package-duplicate) die "$name is configured in both global and project scope; Pi cannot update one scope independently (nothing has been modified)" ;;
+    esac
+  done <<EOF
+$output
+EOF
+
+  local existing=false prompt_dir
+  if [ ${#UPDATE_SKILLS[@]} -gt 0 ] || [ ${#UPDATE_PI_PACKAGES[@]} -gt 0 ] || [ ${#UPDATE_PINNED[@]} -gt 0 ]; then
+    existing=true
+  fi
+  prompt_dir=$(prompt_dest_dir)
+  [ -f "$prompt_dir/setup-implementation-orchestrator.md" ] && existing=true
+  if [ -n "$PROJECT" ] && { grep -F "$START_MARKER" "$PROJECT/AGENTS.md" >/dev/null 2>&1 || grep -F "$START_MARKER" "$PROJECT/CLAUDE.md" >/dev/null 2>&1; }; then
+    existing=true
+  fi
+  if "$existing"; then
+    _UPDATE_STATUS=detected
+    _UPDATE_NOTE="(updates installed components only; missing dependencies are skipped)"
+  else
+    _UPDATE_STATUS=missing
+    _UPDATE_NOTE="(no existing managed installation at selected scope)"
+    [ "$MODE" = inspect ] || die "no existing orchestrator installation found at $SKILL_SCOPE scope; run normal setup first (nothing has been modified)"
+  fi
+}
+
 resolve_choices() {
   if [ -n "$PROJECT" ]; then
+    resolve_project_namespace
     detect_instruction_file
     if [ "$INSTRUCTION_STATUS" = unresolved ] && [ "$MODE" != inspect ]; then
       if [ -f "$PROJECT/CLAUDE.md" ] && [ -f "$PROJECT/AGENTS.md" ]; then
@@ -666,7 +913,9 @@ resolve_choices() {
     SCOPE_STATUS=answered
   fi
 
+  resolve_subagent_settings
   resolve_mcp_config
+  resolve_update_plan
 }
 
 # Shared awk helper: literal (not regex) occurrence count of one token per line.
@@ -836,11 +1085,11 @@ validate_project_outputs() {
   [ -n "$PROJECT" ] || return 0
   validate_output_file "$INSTRUCTION_FILE" "instruction file"
   validate_managed_block "$PROJECT/$INSTRUCTION_FILE"
-  validate_dir_target "docs" "docs directory"
-  validate_dir_target "docs/agents" "docs/agents directory"
-  validate_output_file "docs/agents/artifacts.md" "generated artifact-map doc"
-  validate_output_file "docs/agents/issue-tracker.md" "generated tracker doc"
-  validate_output_file "docs/agents/domain.md" "generated domain doc"
+  validate_dir_target "$PROJECT_NS" "$PROJECT_NS directory"
+  validate_dir_target "$NS_AGENTS" "$NS_AGENTS directory"
+  validate_output_file "$NS_ARTIFACTS" "generated artifact-map doc"
+  validate_output_file "$NS_TRACKER" "generated tracker doc"
+  validate_output_file "$NS_DOMAIN" "generated domain doc"
   validate_mcp_config
 }
 
@@ -886,15 +1135,15 @@ validate_prompt_outputs() {
 resolve_custom_doc_decisions() {
   [ -n "$PROJECT" ] || return 0
   local doc
-  doc="$PROJECT/docs/agents/artifacts.md"
+  doc="$PROJECT/$NS_ARTIFACTS"
   if artifacts_doc_requires_replace "$doc" && ! "$REPLACE_CUSTOM"; then
     custom_doc_decision "$doc"
   fi
-  doc="$PROJECT/docs/agents/issue-tracker.md"
+  doc="$PROJECT/$NS_TRACKER"
   if tracker_doc_requires_replace "$doc" && ! "$REPLACE_CUSTOM"; then
     custom_doc_decision "$doc"
   fi
-  doc="$PROJECT/docs/agents/domain.md"
+  doc="$PROJECT/$NS_DOMAIN"
   if domain_doc_requires_replace "$doc" && ! "$REPLACE_CUSTOM"; then
     custom_doc_decision "$doc"
   fi
@@ -914,8 +1163,8 @@ custom_doc_decision() {
   case "$answer" in
   y | Y | yes | YES)
     case "$doc" in
-    "$PROJECT/docs/agents/issue-tracker.md") TRACKER_CUSTOM_APPROVED=true ;;
-    "$PROJECT/docs/agents/domain.md") DOMAIN_CUSTOM_APPROVED=true ;;
+    "$PROJECT/$NS_TRACKER") TRACKER_CUSTOM_APPROVED=true ;;
+    "$PROJECT/$NS_DOMAIN") DOMAIN_CUSTOM_APPROVED=true ;;
     *) ARTIFACTS_CUSTOM_APPROVED=true ;;
     esac
     ;;
@@ -927,41 +1176,187 @@ custom_doc_decision() {
 }
 
 build_skill_args() {
-  SKILL_ARGS=(npx skills add legout/skills)
   local s
-  for s in ${LEGOUT_SKILLS[@]+"${LEGOUT_SKILLS[@]}"}; do
-    SKILL_ARGS+=(--skill "$s")
-  done
-  if [ "$SKILL_SCOPE" = Project ]; then
-    SKILL_ARGS+=(--agent pi --yes --copy)
+  if [ "$OPERATION" = update ]; then
+    SKILL_ARGS=()
+    if [ ${#UPDATE_SKILLS[@]} -gt 0 ]; then
+      SKILL_ARGS=(npx skills update)
+      for s in ${UPDATE_SKILLS[@]+"${UPDATE_SKILLS[@]}"}; do
+        SKILL_ARGS+=("$s")
+      done
+      if [ "$SKILL_SCOPE" = Project ]; then
+        SKILL_ARGS+=(--project --yes)
+      else
+        SKILL_ARGS+=(--global --yes)
+      fi
+    fi
   else
-    SKILL_ARGS+=(--global --agent pi --yes --copy)
+    SKILL_ARGS=(npx skills add legout/skills)
+    for s in ${LEGOUT_SKILLS[@]+"${LEGOUT_SKILLS[@]}"}; do
+      SKILL_ARGS+=(--skill "$s")
+    done
+    if [ "$SKILL_SCOPE" = Project ]; then
+      SKILL_ARGS+=(--agent pi --yes --copy)
+    else
+      SKILL_ARGS+=(--global --agent pi --yes --copy)
+    fi
   fi
 }
 
 render_install_lines() {
-  printf '+'
-  printf ' %q' ${SKILL_ARGS[@]+"${SKILL_ARGS[@]}"}
-  printf '\n'
-  if [ "$SKILL_SCOPE" = Project ]; then
-    printf '+ (cd %q && pi install --local npm:pi-subagents)\n' "$PROJECT"
-    printf '+ (cd %q && pi install --local npm:pi-intercom)\n' "$PROJECT"
-    if [ "$TRACKER_PROFILE" = epiq ]; then
-      printf '+ (cd %q && pi install --local npm:pi-mcp-adapter)\n' "$PROJECT"
-    fi
-    printf '%s\n' '+ merge global subagent model/thinking settings into .pi/settings.json (fills missing fields only; never overwrites project choices)'
+  local package
+  if [ ${#SKILL_ARGS[@]} -gt 0 ]; then
+    printf '+'
+    printf ' %q' ${SKILL_ARGS[@]+"${SKILL_ARGS[@]}"}
+    printf '\n'
+  fi
+  if [ "$OPERATION" = update ]; then
+    for package in ${UPDATE_PI_PACKAGES[@]+"${UPDATE_PI_PACKAGES[@]}"}; do
+      if [ "$SKILL_SCOPE" = Project ]; then
+        printf '+ (cd %q && pi update %q)\n' "$PROJECT" "$package"
+      else
+        printf '+ (cd %q && pi update %q)\n' "$HOME" "$package"
+      fi
+    done
+    [ ${#UPDATE_SKILL_MISSING[@]} -eq 0 ] || printf '  skipped missing skills: %s\n' "${UPDATE_SKILL_MISSING[*]}"
+    [ ${#UPDATE_PI_MISSING[@]} -eq 0 ] || printf '  skipped missing Pi packages: %s\n' "${UPDATE_PI_MISSING[*]}"
+    [ ${#UPDATE_PINNED[@]} -eq 0 ] || printf '  skipped pinned Pi packages: %s\n' "${UPDATE_PINNED[*]}"
   else
-    printf '%s\n' '+ pi install npm:pi-subagents' '+ pi install npm:pi-intercom'
-    if [ "$TRACKER_PROFILE" = epiq ]; then
-      printf '%s\n' '+ pi install npm:pi-mcp-adapter'
+    if [ "$SKILL_SCOPE" = Project ]; then
+      printf '+ (cd %q && pi install --local npm:pi-subagents)\n' "$PROJECT"
+      printf '+ (cd %q && pi install --local npm:pi-intercom)\n' "$PROJECT"
+      if [ "$TRACKER_PROFILE" = epiq ]; then
+        printf '+ (cd %q && pi install --local npm:pi-mcp-adapter)\n' "$PROJECT"
+      fi
+      printf '%s\n' '+ merge global subagent model/thinking settings into .pi/settings.json (fills missing fields only; never overwrites project choices)'
+    else
+      printf '%s\n' '+ pi install npm:pi-subagents' '+ pi install npm:pi-intercom'
+      if [ "$TRACKER_PROFILE" = epiq ]; then
+        printf '%s\n' '+ pi install npm:pi-mcp-adapter'
+      fi
     fi
   fi
+  if model_update_requested; then
+    printf '+ update %q subagent overrides: worker model=%q thinking=%q; reviewer model=%q thinking=%q\n' \
+      "$SUBAGENT_SETTINGS_PATH" "$WORKER_MODEL_CHOICE" "$WORKER_THINKING_CHOICE" \
+      "$REVIEWER_MODEL_CHOICE" "$REVIEWER_THINKING_CHOICE"
+  fi
+}
+
+subagent_model_settings() {
+  # usage: subagent_model_settings preview|apply
+  local action="$1" project_settings=""
+  [ -n "$PROJECT" ] && project_settings="$PROJECT/.pi/settings.json"
+  node - "$action" "$HOME/.pi/agent/settings.json" "$SUBAGENT_SETTINGS_PATH" "$project_settings" "$SKILL_SCOPE" \
+    "$WORKER_MODEL_CHOICE" "$WORKER_THINKING_CHOICE" \
+    "$REVIEWER_MODEL_CHOICE" "$REVIEWER_THINKING_CHOICE" <<'EOF'
+const fs = require('fs');
+const path = require('path');
+const [action, globalPath, targetPath, projectPath, scope, workerModel, workerThinking, reviewerModel, reviewerThinking] = process.argv.slice(2);
+const read = file => fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
+const readOptional = file => { try { return file ? read(file) : {}; } catch { return {}; } };
+const globalSettings = read(globalPath);
+const target = targetPath === globalPath ? globalSettings : read(targetPath);
+const before = JSON.stringify(target);
+
+// Project override objects replace their global counterparts. Preserve the
+// existing setup behavior by filling missing fields before explicit choices.
+if (scope === 'Project') {
+  const globals = globalSettings.subagents?.agentOverrides;
+  const projects = target.subagents?.agentOverrides;
+  if (globals && projects) {
+    for (const [name, override] of Object.entries(projects)) {
+      const global = globals[name];
+      if (!global || typeof global !== 'object' || !override || typeof override !== 'object') continue;
+      for (const [key, value] of Object.entries(global)) {
+        if (!(key in override)) override[key] = value;
+      }
+    }
+  }
+}
+
+const choices = {
+  worker: { model: workerModel, thinking: workerThinking },
+  reviewer: { model: reviewerModel, thinking: reviewerThinking },
+};
+if (scope === 'Project') {
+  for (const [name, fields] of Object.entries(choices)) {
+    if (!Object.values(fields).some(choice => choice !== 'keep')) continue;
+    const projectOverride = target.subagents?.agentOverrides?.[name];
+    const globalOverride = globalSettings.subagents?.agentOverrides?.[name];
+    if (projectOverride === undefined && globalOverride && typeof globalOverride === 'object') {
+      target.subagents ??= {};
+      target.subagents.agentOverrides ??= {};
+      target.subagents.agentOverrides[name] = { ...globalOverride };
+    }
+  }
+}
+for (const [name, fields] of Object.entries(choices)) {
+  for (const [field, choice] of Object.entries(fields)) {
+    if (choice === 'keep') continue;
+    target.subagents ??= {};
+    target.subagents.agentOverrides ??= {};
+    const override = target.subagents.agentOverrides[name] ??= {};
+    if (choice === 'inherit') delete override[field];
+    else override[field] = choice;
+  }
+}
+
+const effective = name => {
+  const projectSettings = scope === 'Project' ? target : readOptional(projectPath);
+  const projectOverride = projectSettings.subagents?.agentOverrides?.[name];
+  const globalOverride = (targetPath === globalPath ? target : globalSettings).subagents?.agentOverrides?.[name];
+  const override = projectOverride ?? globalOverride;
+  return {
+    model: override?.model ?? 'inherits parent model',
+    thinking: override?.thinking ?? 'default',
+    source: projectOverride ? 'project .pi/settings.json' : globalOverride ? '~/.pi/agent/settings.json' : 'builtin default',
+  };
+};
+const changed = JSON.stringify(target) !== before;
+
+if (action === 'preview') {
+  console.log(`Subagent settings target: ${targetPath}`);
+  for (const name of ['worker', 'reviewer']) {
+    const value = effective(name);
+    console.log(`  ${name}: ${value.model} (thinking: ${value.thinking}) — ${value.source}`);
+  }
+  console.log(`  settings write: ${changed ? 'yes' : 'no'}`);
+  console.log('  resulting subagents.agentOverrides:');
+  for (const line of JSON.stringify(target.subagents?.agentOverrides ?? {}, null, 2).split('\n')) {
+    console.log(`    ${line}`);
+  }
+  process.exit(0);
+}
+if (!changed) process.exit(0);
+fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+const mode = fs.existsSync(targetPath) ? fs.statSync(targetPath).mode & 0o777 : 0o600;
+const temp = path.join(path.dirname(targetPath), `.${path.basename(targetPath)}.tmp-${process.pid}`);
+try {
+  fs.writeFileSync(temp, JSON.stringify(target, null, 2) + '\n', { flag: 'wx', mode });
+  fs.chmodSync(temp, mode);
+  fs.renameSync(temp, targetPath);
+} catch (error) {
+  try { fs.unlinkSync(temp); } catch {}
+  throw error;
+}
+console.log(`Subagent settings: updated ${targetPath}`);
+EOF
 }
 
 # A project .pi/settings.json subagents.agentOverrides.<name> object replaces the
 # global one wholesale; an entry like {"tools":"inherit"} would silently drop the
 # globally configured model. Fill missing fields from the global settings.
 harmonize_subagent_models() {
+  if model_update_requested; then
+    if [ "$SKILL_SCOPE" = Project ]; then
+      refuse_symlink_ancestors ".pi/settings.json"
+    elif mcp_config_has_symlink_ancestor "$SUBAGENT_SETTINGS_PATH"; then
+      die "refusing to update Pi settings through the symlink: $MCP_SYMLINK_PATH; external installs already performed remain installed"
+    fi
+    subagent_model_settings apply || die "failed to update subagent model settings in $SUBAGENT_SETTINGS_PATH; rerun setup to converge"
+    return
+  fi
   [ "$SKILL_SCOPE" = Project ] || return 0
   local settings="$PROJECT/.pi/settings.json" user="$HOME/.pi/agent/settings.json"
   [ -f "$settings" ] || return 0
@@ -1065,8 +1460,8 @@ render_workflow_block() {
 
 ### Routing and authority
 
-- Read `docs/agents/artifacts.md` for the project artifact mapping and load the `planning-contract` skill for artifact classification and planning handoffs; read `docs/agents/issue-tracker.md` and `docs/agents/domain.md` when their scope applies. Preserve established project conventions.
 EOF
+  printf '%s\n' "- Read \`$NS_ARTIFACTS\` for the project artifact mapping and load the \`planning-contract\` skill for artifact classification and planning handoffs; read \`$NS_TRACKER\` and \`$NS_DOMAIN\` when their scope applies. Preserve established project conventions."
   if [ "$TRACKER_PROFILE" = epiq ]; then
     cat <<'EOF'
 - When the tracker is Epiq, follow the Epiq workflow guidance and use `epiq_*` MCP tools for board operations; never use the `epiq` CLI or edit Epiq state files directly. Setup configures the MCP server but never initializes an Epiq board or project.
@@ -1085,21 +1480,21 @@ EOF
 
 EOF
   if [ "$DOMAIN_LAYOUT" = "Multiple contexts" ]; then
+    printf '%s\n' "- \`$NS_DOMAIN\`: this repository's context-layout declaration."
     cat <<'EOF'
-- `docs/agents/domain.md`: this repository's context-layout declaration.
 - Per-context `CONTEXT.md` files: canonical vocabulary for their package or context. No single root `CONTEXT.md` is canonical here.
 - `CONTEXT-MAP.md`, when present: the map of real contexts and their glossaries; read it before recording vocabulary or new contexts.
-- `docs/adr/`: accepted architecture decisions.
-- `docs/agents/`: workflow, tracker, and artifact-map configuration.
-- `docs/specs/` or the configured tracker: feature behavior and acceptance.
+EOF
+    printf '%s\n' "- \`$NS_ADR\`: accepted architecture decisions." "- \`$NS_AGENTS/\`: workflow, tracker, and artifact-map configuration." "- \`$NS_SPECS\` or the configured tracker: feature behavior and acceptance."
+    cat <<'EOF'
 - implementation plans/tickets: execution entry points and explicit source references.
 EOF
   else
     cat <<'EOF'
 - `CONTEXT.md`: canonical domain vocabulary for the whole repository.
-- `docs/adr/`: accepted architecture decisions.
-- `docs/agents/`: workflow, tracker, and artifact-map configuration.
-- `docs/specs/` or the configured tracker: feature behavior and acceptance.
+EOF
+    printf '%s\n' "- \`$NS_ADR\`: accepted architecture decisions." "- \`$NS_AGENTS/\`: workflow, tracker, and artifact-map configuration." "- \`$NS_SPECS\` or the configured tracker: feature behavior and acceptance."
+    cat <<'EOF'
 - implementation plans/tickets: execution entry points and explicit source references.
 EOF
   fi
@@ -1120,7 +1515,7 @@ EOF
   elif [ "$TRACKER" = "GitHub Issues" ]; then
     echo "Tickets are GitHub issues in this repository. Use the GitHub CLI (gh) to read and manage them."
   elif [ "$TRACKER" = "Local Markdown" ]; then
-    echo "Tickets are Markdown files under docs/tickets/."
+    echo "Tickets are Markdown files under $NS_TICKETS."
   else
     echo "Tickets are tracked as described above."
   fi
@@ -1138,15 +1533,15 @@ Each package or context owns the `CONTEXT.md` beside it; no root `CONTEXT.md` is
 
 Consume an existing `CONTEXT-MAP.md` as-is: it maps the real contexts and their glossaries. When context ownership for a term is missing or ambiguous, inspect the package layout and ask the owner which context owns it; do not create a root or global glossary to resolve the ambiguity.
 
-Cross-cutting decisions live in docs/adr/.
 EOF
+    echo "Cross-cutting decisions live in $NS_ADR."
   else
     cat <<'EOF'
 Layout: single context.
 
 - CONTEXT.md: canonical domain vocabulary for the whole repository.
-- docs/adr/: accepted architecture decisions.
 EOF
+    echo "- $NS_ADR: accepted architecture decisions."
   fi
 }
 
@@ -1156,13 +1551,15 @@ render_artifacts_doc() {
 
 Mapping: generated defaults. This file is declarative documentation, not executable configuration.
 
-- docs/research/: investigations, design studies, and probe reports.
-- docs/adr/: accepted architectural decisions.
-- docs/specs/: behavioral contracts.
-- docs/plans/: execution maps.
-- docs/tickets/: local work items.
-- docs/agents/: workflow configuration, including the tracker (docs/agents/issue-tracker.md) and the context layout (docs/agents/domain.md).
-- CONTEXT.md: canonical domain vocabulary per the context layout declared in docs/agents/domain.md.
+EOF
+  echo "- $NS_RESEARCH: investigations, design studies, and probe reports."
+  echo "- $NS_ADR: accepted architectural decisions."
+  echo "- $NS_SPECS: behavioral contracts."
+  echo "- $NS_PLANS: execution maps."
+  echo "- $NS_TICKETS: local work items."
+  echo "- $NS_AGENTS/: workflow configuration, including the tracker ($NS_TRACKER) and the context layout ($NS_DOMAIN)."
+  echo "- CONTEXT.md: canonical domain vocabulary per the context layout declared in $NS_DOMAIN."
+  cat <<'EOF'
 
 Explicit project mappings recorded here override these defaults. Planning artifact and handoff semantics are owned by the `planning-contract` skill from `legout/skills`.
 
@@ -1322,9 +1719,9 @@ mcp_config_preview_action() {
 
 print_preview() {
   local inst_doc="$PROJECT/$INSTRUCTION_FILE"
-  local artifacts_doc="$PROJECT/docs/agents/artifacts.md"
-  local tracker_doc="$PROJECT/docs/agents/issue-tracker.md"
-  local domain_doc="$PROJECT/docs/agents/domain.md"
+  local artifacts_doc="$PROJECT/$NS_ARTIFACTS"
+  local tracker_doc="$PROJECT/$NS_TRACKER"
+  local domain_doc="$PROJECT/$NS_DOMAIN"
   echo "=== Preview ==="
   echo "Skill scope: $SKILL_SCOPE"
   if [ -n "$PROJECT" ]; then
@@ -1332,10 +1729,17 @@ print_preview() {
   else
     echo "Project: none (--skip-project)"
   fi
-  echo "--- install commands (run only after approval) ---"
+  echo "--- $OPERATION commands (run only after approval) ---"
   render_install_lines
   echo
   require_prereqs report
+  echo
+  echo "--- subagent model settings ---"
+  if command -v node >/dev/null 2>&1; then
+    subagent_model_settings preview || echo "Subagent settings preview unavailable; fix invalid settings JSON before apply."
+  else
+    echo "Subagent settings preview unavailable until node is installed."
+  fi
   if [ -n "$MCP_CONFIG_PATH" ]; then
     echo
     echo "--- MCP config: $MCP_CONFIG_PATH ($(mcp_config_preview_action)) ---"
@@ -1358,11 +1762,11 @@ print_preview() {
       echo "--- $INSTRUCTION_FILE (new file) ---"
     fi
     render_instruction_file
-    echo "--- docs/agents/artifacts.md ($(preview_doc_action "$artifacts_doc")) ---"
+    echo "--- $NS_ARTIFACTS ($(preview_doc_action "$artifacts_doc")) ---"
     render_artifacts_doc
-    echo "--- docs/agents/issue-tracker.md ($(preview_doc_action "$tracker_doc")) ---"
+    echo "--- $NS_TRACKER ($(preview_doc_action "$tracker_doc")) ---"
     render_tracker_doc
-    echo "--- docs/agents/domain.md ($(preview_doc_action "$domain_doc")) ---"
+    echo "--- $NS_DOMAIN ($(preview_doc_action "$domain_doc")) ---"
     render_domain_doc
   fi
   echo "=== End preview ==="
@@ -1370,21 +1774,21 @@ print_preview() {
 
 preview_doc_action() {
   local approved=false
-  if [ "$1" = "$PROJECT/docs/agents/artifacts.md" ] && artifacts_doc_requires_replace "$1"; then
+  if [ "$1" = "$PROJECT/$NS_ARTIFACTS" ] && artifacts_doc_requires_replace "$1"; then
     approved="$ARTIFACTS_CUSTOM_APPROVED"
     if "$REPLACE_CUSTOM" || "$approved"; then
       echo "custom content (replacement explicitly approved)"
     else
       echo "custom content (requires --replace-custom)"
     fi
-  elif [ "$1" = "$PROJECT/docs/agents/issue-tracker.md" ] && tracker_doc_requires_replace "$1"; then
+  elif [ "$1" = "$PROJECT/$NS_TRACKER" ] && tracker_doc_requires_replace "$1"; then
     approved="$TRACKER_CUSTOM_APPROVED"
     if "$REPLACE_CUSTOM" || "$approved"; then
       echo "custom content (replacement explicitly approved)"
     else
       echo "custom content (requires --replace-custom)"
     fi
-  elif [ "$1" = "$PROJECT/docs/agents/domain.md" ] && domain_doc_requires_replace "$1"; then
+  elif [ "$1" = "$PROJECT/$NS_DOMAIN" ] && domain_doc_requires_replace "$1"; then
     approved="$DOMAIN_CUSTOM_APPROVED"
     if "$REPLACE_CUSTOM" || "$approved"; then
       echo "custom content (replacement explicitly approved)"
@@ -1456,9 +1860,9 @@ stage_files() {
   T_SIG=()
   T_MODE=()
   T_ACTION=()
-  prepare_target 1 docs/agents/artifacts.md artifacts
-  prepare_target 2 docs/agents/issue-tracker.md tracker
-  prepare_target 3 docs/agents/domain.md domain
+  prepare_target 1 "$NS_ARTIFACTS" artifacts
+  prepare_target 2 "$NS_TRACKER" tracker
+  prepare_target 3 "$NS_DOMAIN" domain
   prepare_target 4 "$INSTRUCTION_FILE" instruction
   local idx
   for idx in 1 2 3 4; do
@@ -1522,6 +1926,10 @@ install_doc() {
   elif [ -e "$dest" ]; then
     concurrent_change_error "$dest"
     return 1
+  fi
+  if [ "$had" = yes ] && cmp -s "$ORCH_WORK/$stage" "$dest"; then
+    T_ACTION[$idx]=unchanged
+    return 0
   fi
 
   oldpwd=$(pwd)
@@ -1625,13 +2033,13 @@ create_project_dir() {
 write_project_files() {
   # Recheck output symlink boundaries after external installs.
   refuse_symlink_ancestors "$INSTRUCTION_FILE"
-  refuse_symlink_ancestors docs
-  refuse_symlink_ancestors docs/agents
-  create_project_dir docs || handle_directory_failure "$PROJECT/docs"
-  create_project_dir docs/agents || handle_directory_failure "$PROJECT/docs/agents"
-  install_doc "$PROJECT/docs/agents/artifacts.md" artifacts 1 || handle_write_failure "$?" 1
-  install_doc "$PROJECT/docs/agents/issue-tracker.md" tracker 2 || handle_write_failure "$?" 2
-  install_doc "$PROJECT/docs/agents/domain.md" domain 3 || handle_write_failure "$?" 3
+  refuse_symlink_ancestors "$PROJECT_NS"
+  refuse_symlink_ancestors "$NS_AGENTS"
+  create_project_dir "$PROJECT_NS" || handle_directory_failure "$PROJECT/$PROJECT_NS"
+  create_project_dir "$NS_AGENTS" || handle_directory_failure "$PROJECT/$NS_AGENTS"
+  install_doc "$PROJECT/$NS_ARTIFACTS" artifacts 1 || handle_write_failure "$?" 1
+  install_doc "$PROJECT/$NS_TRACKER" tracker 2 || handle_write_failure "$?" 2
+  install_doc "$PROJECT/$NS_DOMAIN" domain 3 || handle_write_failure "$?" 3
   install_doc "$PROJECT/$INSTRUCTION_FILE" instruction 4 || handle_write_failure "$?" 4
 }
 
@@ -1639,48 +2047,70 @@ exec_install() {
   # usage: exec_install DESCRIPTION CMD...
   local desc="$1"
   shift
+  local failure="external installation failed: $desc. No project files were changed. External steps already completed: ${STEPS_DONE:-none}."
+  if [ "$OPERATION" = update ]; then
+    failure="external update failed: $desc. Managed config was not written; the failing updater may have partially changed its own dependency files. External steps already completed: ${STEPS_DONE:-none}."
+  fi
   if [ "$SKILL_SCOPE" = Project ]; then
-    (cd "$PROJECT" && "$@") ||
-      die "external installation failed: $desc. No project files were changed. External steps already completed: ${STEPS_DONE:-none}."
+    (cd "$PROJECT" && "$@") || die "$failure"
   else
-    "$@" ||
-      die "external installation failed: $desc. No project files were changed. External steps already completed: ${STEPS_DONE:-none}."
+    "$@" || die "$failure"
   fi
   STEPS_DONE="${STEPS_DONE:+$STEPS_DONE; }$desc"
 }
 
 run_installs() {
   STEPS_DONE=
-  exec_install "npx skills add legout/skills (${#LEGOUT_SKILLS[@]} skills)" ${SKILL_ARGS[@]+"${SKILL_ARGS[@]}"}
-  local scope_flag=""
-  [ "$SKILL_SCOPE" = Project ] && scope_flag="--local"
-  local desc="pi install${scope_flag:+ $scope_flag}"
-  exec_install "$desc npm:pi-subagents" pi install $scope_flag npm:pi-subagents
-  exec_install "$desc npm:pi-intercom" pi install $scope_flag npm:pi-intercom
-  if [ "$TRACKER_PROFILE" = epiq ]; then
-    exec_install "$desc npm:pi-mcp-adapter" pi install $scope_flag npm:pi-mcp-adapter
+  local package
+  if [ "$OPERATION" = update ]; then
+    if [ ${#SKILL_ARGS[@]} -gt 0 ]; then
+      exec_install "npx skills update (${#UPDATE_SKILLS[@]} installed skills)" ${SKILL_ARGS[@]+"${SKILL_ARGS[@]}"}
+    fi
+    for package in ${UPDATE_PI_PACKAGES[@]+"${UPDATE_PI_PACKAGES[@]}"}; do
+      if [ "$SKILL_SCOPE" = Project ]; then
+        exec_install "pi update $package" pi update "$package"
+      else
+        (cd "$HOME" && exec_install "pi update $package" pi update "$package")
+      fi
+    done
+  else
+    exec_install "npx skills add legout/skills (${#LEGOUT_SKILLS[@]} skills)" ${SKILL_ARGS[@]+"${SKILL_ARGS[@]}"}
+    local scope_flag=""
+    [ "$SKILL_SCOPE" = Project ] && scope_flag="--local"
+    local desc="pi install${scope_flag:+ $scope_flag}"
+    exec_install "$desc npm:pi-subagents" pi install $scope_flag npm:pi-subagents
+    exec_install "$desc npm:pi-intercom" pi install $scope_flag npm:pi-intercom
+    if [ "$TRACKER_PROFILE" = epiq ]; then
+      exec_install "$desc npm:pi-mcp-adapter" pi install $scope_flag npm:pi-mcp-adapter
+    fi
   fi
 }
 
 install_prompts() {
-  local dest f base copied=0
+  local dest f base copied=0 unchanged=0
   dest=$(prompt_dest_dir)
   # Recheck destination kind after external installs (same boundary as project writes).
   validate_prompt_outputs
   mkdir -p "$dest" || die "failed to create prompt-command directory: $dest; rerun setup to converge"
   for f in $(package_prompt_files); do
     base=${f##*/}
+    if [ -f "$dest/$base" ] && cmp -s "$f" "$dest/$base"; then
+      unchanged=$((unchanged + 1))
+      continue
+    fi
     cp "$f" "$dest/$base" || die "failed to install prompt command $base to $dest; rerun setup to converge"
     copied=$((copied + 1))
   done
-  echo "Prompt commands installed: $copied file(s) -> $dest"
+  echo "Prompt commands: $copied updated, $unchanged unchanged -> $dest"
 }
 
 apply_phase() {
   print_preview
   echo
   if ! "$ASSUME_YES"; then
-    if [ -n "$PROJECT" ]; then
+    if [ "$OPERATION" = update ]; then
+      printf 'Run the listed updates and refresh changed managed configuration? [y/N] '
+    elif [ -n "$PROJECT" ]; then
       printf 'Install the listed skills/packages and write this project configuration? [y/N] '
     else
       printf 'Install the listed skills and packages? [y/N] '
@@ -1698,7 +2128,7 @@ apply_phase() {
   require_prereqs enforce
   stage_files
   run_installs
-  POST_INSTALL=true
+  [ -z "$STEPS_DONE" ] || POST_INSTALL=true
   install_mcp_config || die "MCP config write failed; rerun setup to converge."
   install_prompts
   harmonize_subagent_models
@@ -1706,13 +2136,17 @@ apply_phase() {
     write_project_files
   fi
   echo
-  echo "Setup complete ($SKILL_SCOPE skill scope)."
+  if [ "$OPERATION" = update ]; then
+    echo "Update complete ($SKILL_SCOPE skill scope)."
+  else
+    echo "Setup complete ($SKILL_SCOPE skill scope)."
+  fi
   if [ -n "$PROJECT" ]; then
     echo "Project files in $PROJECT:"
     echo "  $INSTRUCTION_FILE: managed block ${T_ACTION[4]:-written}"
-    echo "  docs/agents/artifacts.md: ${T_ACTION[1]:-written}"
-    echo "  docs/agents/issue-tracker.md: ${T_ACTION[2]:-written}"
-    echo "  docs/agents/domain.md: ${T_ACTION[3]:-written}"
+    echo "  $NS_ARTIFACTS: ${T_ACTION[1]:-written}"
+    echo "  $NS_TRACKER: ${T_ACTION[2]:-written}"
+    echo "  $NS_DOMAIN: ${T_ACTION[3]:-written}"
   fi
   if [ -n "$MCP_CONFIG_PATH" ]; then
     echo "  Epiq MCP config: $MCP_CONFIG_PATH (${MCP_CONFIG_ACTION:-written})"
@@ -1750,7 +2184,7 @@ suggested_command() {
     else
       cmd="$cmd --domain-layout single"
     fi
-    if tracker_doc_requires_replace "$PROJECT/docs/agents/issue-tracker.md" || domain_doc_requires_replace "$PROJECT/docs/agents/domain.md" || artifacts_doc_requires_replace "$PROJECT/docs/agents/artifacts.md"; then
+    if tracker_doc_requires_replace "$PROJECT/$NS_TRACKER" || domain_doc_requires_replace "$PROJECT/$NS_DOMAIN" || artifacts_doc_requires_replace "$PROJECT/$NS_ARTIFACTS"; then
       cmd="$cmd --replace-custom"
     fi
   fi
@@ -1759,6 +2193,11 @@ suggested_command() {
   else
     cmd="$cmd --skill-scope global"
   fi
+  [ "$OPERATION" != update ] || cmd="$cmd --update"
+  cmd="$cmd --worker-model $(printf '%q' "$WORKER_MODEL_CHOICE")"
+  cmd="$cmd --reviewer-model $(printf '%q' "$REVIEWER_MODEL_CHOICE")"
+  cmd="$cmd --worker-thinking $WORKER_THINKING_CHOICE"
+  cmd="$cmd --reviewer-thinking $REVIEWER_THINKING_CHOICE"
   echo "$cmd --dry-run"
 }
 
@@ -1779,7 +2218,7 @@ inspect_report() {
     echo "Skill scope evidence: $(scope_evidence)"
   fi
   echo
-  echo "Choices (--instruction-file / --tracker / --domain-layout / --skill-scope):"
+  echo "Choices (--instruction-file / --tracker / --domain-layout / --skill-scope / subagent model flags):"
   if [ -n "$PROJECT" ]; then
     echo "  instruction-file: ${INSTRUCTION_FILE:-?} [$INSTRUCTION_STATUS] $INSTRUCTION_NOTE"
     echo "  tracker: ${TRACKER:-?} [$TRACKER_STATUS] $TRACKER_NOTE"
@@ -1792,26 +2231,50 @@ inspect_report() {
     fi
   fi
   echo "  skill-scope: ${SKILL_SCOPE:-?} [$SCOPE_STATUS] $SCOPE_NOTE"
+  echo "  operation: $OPERATION"
+  if [ "$OPERATION" = update ]; then
+    echo "  existing installation: $_UPDATE_STATUS $_UPDATE_NOTE"
+    echo "    skills to update: ${UPDATE_SKILLS[*]:-none}"
+    echo "    Pi packages to update: ${UPDATE_PI_PACKAGES[*]:-none}"
+    echo "    missing skills skipped: ${UPDATE_SKILL_MISSING[*]:-none}"
+    echo "    missing Pi packages skipped: ${UPDATE_PI_MISSING[*]:-none}"
+    echo "    pinned Pi packages skipped: ${UPDATE_PINNED[*]:-none}"
+  fi
+  if "$MODEL_FLAGS_EXPLICIT"; then
+    echo "  subagent models: explicit"
+  else
+    echo "  subagent models: keep existing [safe default]"
+  fi
+  echo "    worker: model=$WORKER_MODEL_CHOICE thinking=$WORKER_THINKING_CHOICE"
+  echo "    reviewer: model=$REVIEWER_MODEL_CHOICE thinking=$REVIEWER_THINKING_CHOICE"
+  echo "    settings target: $SUBAGENT_SETTINGS_PATH"
+  if command -v node >/dev/null 2>&1; then
+    resolve_agent_models | while IFS=$(printf '\t') read -r name model thinking source; do
+      printf '    current %s: %s (thinking: %s) — %s\n' "$name" "$model" "$thinking" "$source"
+    done
+  else
+    echo "    current values: unavailable until node is installed"
+  fi
   echo "  prompt-command destination: $(prompt_dest_dir)"
   if [ -n "$MCP_CONFIG_PATH" ]; then
     echo "  Epiq MCP config: $MCP_CONFIG_PATH [$MCP_CONFIG_STATUS] $MCP_CONFIG_NOTE"
   fi
   if [ -n "$PROJECT" ]; then
     echo "Generated docs:"
-    if artifacts_doc_requires_replace "$PROJECT/docs/agents/artifacts.md"; then
-      echo "  docs/agents/artifacts.md: UNRESOLVED unrecognized custom content; pass --replace-custom only after explicit approval"
+    if artifacts_doc_requires_replace "$PROJECT/$NS_ARTIFACTS"; then
+      echo "  $NS_ARTIFACTS: UNRESOLVED unrecognized custom content; pass --replace-custom only after explicit approval"
     else
-      echo "  docs/agents/artifacts.md: owned/generated configuration"
+      echo "  $NS_ARTIFACTS: owned/generated configuration"
     fi
-    if tracker_doc_requires_replace "$PROJECT/docs/agents/issue-tracker.md"; then
-      echo "  docs/agents/issue-tracker.md: UNRESOLVED unrecognized custom content; pass --replace-custom only after explicit approval"
+    if tracker_doc_requires_replace "$PROJECT/$NS_TRACKER"; then
+      echo "  $NS_TRACKER: UNRESOLVED unrecognized custom content; pass --replace-custom only after explicit approval"
     else
-      echo "  docs/agents/issue-tracker.md: owned/generated configuration"
+      echo "  $NS_TRACKER: owned/generated configuration"
     fi
-    if domain_doc_requires_replace "$PROJECT/docs/agents/domain.md"; then
-      echo "  docs/agents/domain.md: UNRESOLVED unrecognized custom content; pass --replace-custom only after explicit approval"
+    if domain_doc_requires_replace "$PROJECT/$NS_DOMAIN"; then
+      echo "  $NS_DOMAIN: UNRESOLVED unrecognized custom content; pass --replace-custom only after explicit approval"
     else
-      echo "  docs/agents/domain.md: owned/generated configuration"
+      echo "  $NS_DOMAIN: owned/generated configuration"
     fi
   fi
   require_prereqs report

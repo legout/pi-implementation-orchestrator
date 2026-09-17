@@ -112,7 +112,7 @@ test_generated_docs_mutation_is_detected() {
   new_run
   copy_suite "$TMP/suite"
   awk '
-    /install_doc "\$PROJECT\/docs\/agents\// {
+    /install_doc "\$PROJECT\/\$NS_/ {
       print "  if [ \"$ASSUME_YES\" = true ]; then " $0 " ; fi"
       mutated++
       next
@@ -120,7 +120,7 @@ test_generated_docs_mutation_is_detected() {
     { print }
     END { exit (mutated == 3 ? 0 : 1) }
   ' "$ROOT/setup.sh" >"$TMP/suite/setup.sh" ||
-    fail "mutation target not found in setup.sh (expected the three install_doc lines for docs/agents)"
+    fail "mutation target not found in setup.sh (expected the three install_doc lines for the namespace paths)"
   cmp -s "$ROOT/setup.sh" "$TMP/suite/setup.sh" &&
     fail "mutation did not change setup.sh"
   run_suite "$TMP/suite"
