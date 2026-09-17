@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added first-class Epiq tracker setup with conditional `pi-mcp-adapter` installation and safe, scope-selected `epiq-mcp` configuration merging for `.mcp.json` or `~/.config/mcp/mcp.json`.
+
 ## 0.2.0 - 2026-09-15
 
 - Project-scope setup fills missing `model`/`thinking` fields in `.pi/settings.json` `subagents.agentOverrides` from the global `~/.pi/agent/settings.json`, so a partial project override (e.g. `{"tools":"inherit"}`) no longer shadows the configured worker model.

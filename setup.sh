@@ -28,8 +28,18 @@ INSTRUCTION_FILE=
 INSTRUCTION_STATUS=
 INSTRUCTION_NOTE=
 TRACKER=
+TRACKER_PROFILE=
 TRACKER_STATUS=
 TRACKER_NOTE=
+MCP_CONFIG_PATH=
+MCP_CONFIG_STATUS=
+MCP_CONFIG_NOTE=
+MCP_CONFIG_STAGE=
+MCP_CONFIG_EXIST=
+MCP_CONFIG_SIG=
+MCP_CONFIG_MODE=
+MCP_CONFIG_ACTION=
+MCP_SYMLINK_PATH=
 DOMAIN_LAYOUT=
 LAYOUT_STATUS=
 LAYOUT_NOTE=
@@ -52,7 +62,7 @@ T_ACTION=()
 usage() {
   cat >&2 <<'EOF'
 Usage: ./setup.sh [--project PATH|--skip-project]
-            [--instruction-file auto|AGENTS.md|CLAUDE.md] [--tracker auto|github|local|other]
+            [--instruction-file auto|AGENTS.md|CLAUDE.md] [--tracker auto|github|epiq|local|other]
             [--tracker-description TEXT] [--domain-layout auto|single|multi]
             [--skill-scope auto|global|project]
             [--inspect] [--dry-run] [--yes] [--replace-custom]
@@ -163,7 +173,7 @@ parse_args() {
   esac
 
   case "$TRACKER_CHOICE" in
-  auto | github | local | other) ;;
+  auto | github | epiq | local | other) ;;
   *) bad_usage "invalid --tracker value: ${TRACKER_CHOICE:-<missing>}" ;;
   esac
   if [ "$TRACKER_CHOICE" = other ]; then
@@ -377,6 +387,13 @@ detect_tracker() {
     TRACKER_NOTE="(set by --tracker github)"
     return
     ;;
+  epiq)
+    TRACKER="Epiq"
+    TRACKER_PROFILE=epiq
+    TRACKER_STATUS=explicit
+    TRACKER_NOTE="(set by --tracker epiq)"
+    return
+    ;;
   local)
     TRACKER="Local Markdown"
     TRACKER_STATUS=explicit
@@ -396,6 +413,7 @@ detect_tracker() {
     if [ -n "$label" ]; then
       TRACKER=$label
       TRACKER_DESCRIPTION=$label
+      [ "$label" = "Epiq" ] && TRACKER_PROFILE=epiq
       TRACKER_STATUS=detected
       TRACKER_NOTE="(existing docs/agents/issue-tracker.md)"
       return
@@ -489,6 +507,121 @@ detect_skill_scope() {
   fi
 }
 
+mcp_config_has_symlink_ancestor() {
+  local path="$1" boundary
+  MCP_SYMLINK_PATH=
+  if [ -n "$PROJECT" ] && [ "$path" = "$PROJECT/.mcp.json" ]; then
+    boundary="$PROJECT"
+  else
+    boundary="$HOME"
+  fi
+  while :; do
+    if [ -L "$path" ]; then
+      MCP_SYMLINK_PATH="$path"
+      return 0
+    fi
+    [ "$path" = "$boundary" ] && break
+    path=$(dirname "$path")
+  done
+  return 1
+}
+
+refuse_mcp_symlink_ancestors() {
+  if mcp_config_has_symlink_ancestor "$1"; then
+    die "refusing to operate through the MCP config symlink: $MCP_SYMLINK_PATH; resolve it yourself outside setup (nothing has been modified)"
+  fi
+}
+
+mcp_config_merge() {
+  node - "$MCP_CONFIG_PATH" <<'EOF'
+const fs = require('fs');
+const path = process.argv[2];
+const desired = {
+  command: 'npx',
+  args: ['-y', '-p', 'epiq', 'epiq-mcp'],
+  lifecycle: 'lazy',
+};
+let config = {};
+try {
+  config = JSON.parse(fs.readFileSync(path, 'utf8'));
+} catch (error) {
+  if (error.code !== 'ENOENT') {
+    console.error(`invalid JSON in ${path}: ${error.message}`);
+    process.exit(1);
+  }
+}
+if (!config || Array.isArray(config) || typeof config !== 'object') {
+  console.error(`${path} must contain a JSON object`);
+  process.exit(1);
+}
+if (config.mcpServers === undefined) config.mcpServers = {};
+if (!config.mcpServers || Array.isArray(config.mcpServers) || typeof config.mcpServers !== 'object') {
+  console.error(`${path} mcpServers must be a JSON object`);
+  process.exit(1);
+}
+const sameJson = (a, b) => {
+  if (a === b) return true;
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const ak = Object.keys(a);
+  const bk = Object.keys(b);
+  return ak.length === bk.length && ak.every(key => Object.prototype.hasOwnProperty.call(b, key) && sameJson(a[key], b[key]));
+};
+if (Object.prototype.hasOwnProperty.call(config.mcpServers, 'epiq')) {
+  if (!sameJson(config.mcpServers.epiq, desired)) {
+    console.error(`${path} already defines mcpServers.epiq with different settings; resolve it manually`);
+    process.exit(2);
+  }
+} else {
+  config.mcpServers.epiq = desired;
+}
+process.stdout.write(JSON.stringify(config, null, 2) + '\n');
+EOF
+}
+
+validate_mcp_config() {
+  [ -n "$MCP_CONFIG_PATH" ] || return 0
+  refuse_mcp_symlink_ancestors "$MCP_CONFIG_PATH"
+  local parent
+  if [ -e "$MCP_CONFIG_PATH" ]; then
+    [ -f "$MCP_CONFIG_PATH" ] || die "MCP config exists and is not a regular file: $MCP_CONFIG_PATH (nothing has been modified)"
+    parent=$(dirname "$MCP_CONFIG_PATH")
+    [ -d "$parent" ] || die "MCP config parent is not a directory: $parent (nothing has been modified)"
+    [ -x "$parent" ] || die "MCP config parent is not searchable: $parent (nothing has been modified)"
+    [ -w "$parent" ] || die "MCP config parent is not writable: $parent (nothing has been modified)"
+    [ -w "$MCP_CONFIG_PATH" ] || die "MCP config is not writable: $MCP_CONFIG_PATH (nothing has been modified)"
+  else
+    require_creatable "$MCP_CONFIG_PATH"
+  fi
+  if command -v node >/dev/null 2>&1; then
+    if ! mcp_config_merge >/dev/null; then
+      die "cannot use MCP config $MCP_CONFIG_PATH; fix it or resolve the existing Epiq server manually (nothing has been modified)"
+    fi
+  fi
+}
+
+resolve_mcp_config() {
+  MCP_CONFIG_PATH=
+  MCP_CONFIG_STATUS=
+  MCP_CONFIG_NOTE=
+  MCP_CONFIG_STAGE=
+  MCP_CONFIG_ACTION=
+  [ "$TRACKER_PROFILE" = epiq ] || return 0
+  if [ "$SKILL_SCOPE" = Project ]; then
+    MCP_CONFIG_PATH="$PROJECT/.mcp.json"
+  else
+    MCP_CONFIG_PATH="$HOME/.config/mcp/mcp.json"
+  fi
+  if [ -e "$MCP_CONFIG_PATH" ] || [ -L "$MCP_CONFIG_PATH" ]; then
+    MCP_CONFIG_STATUS=detected
+    MCP_CONFIG_NOTE="(existing standard MCP config)"
+  else
+    MCP_CONFIG_STATUS=new
+    MCP_CONFIG_NOTE="(will create standard MCP config)"
+  fi
+  validate_mcp_config
+}
+
 resolve_choices() {
   if [ -n "$PROJECT" ]; then
     detect_instruction_file
@@ -504,12 +637,14 @@ resolve_choices() {
     detect_tracker
     if [ "$TRACKER_STATUS" = unresolved ] && [ "$MODE" != inspect ]; then
       if has_github_origin; then
-        TRACKER=$(ask_choice "Issue tracker" "GitHub Issues" "Local Markdown" "Other")
+        TRACKER=$(ask_choice "Issue tracker" "GitHub Issues" "Epiq" "Local Markdown" "Other")
       else
-        TRACKER=$(ask_choice "Issue tracker" "Local Markdown" "GitHub Issues" "Other")
+        TRACKER=$(ask_choice "Issue tracker" "Local Markdown" "Epiq" "GitHub Issues" "Other")
       fi
       if [ "$TRACKER" = "Other" ]; then
         TRACKER=$(ask_line "Describe the tracker in one line: " "Other")
+      elif [ "$TRACKER" = "Epiq" ]; then
+        TRACKER_PROFILE=epiq
       fi
       TRACKER_STATUS=answered
     fi
@@ -521,11 +656,17 @@ resolve_choices() {
     fi
   fi
 
+  if [ -z "$PROJECT" ] && [ "$TRACKER_CHOICE" != auto ]; then
+    detect_tracker
+  fi
+
   detect_skill_scope
   if [ "$SCOPE_STATUS" = unresolved ] && [ "$MODE" != inspect ]; then
     SKILL_SCOPE=$(ask_choice "Skill installation scope" "Global" "Project")
     SCOPE_STATUS=answered
   fi
+
+  resolve_mcp_config
 }
 
 # Shared awk helper: literal (not regex) occurrence count of one token per line.
@@ -700,6 +841,7 @@ validate_project_outputs() {
   validate_output_file "docs/agents/artifacts.md" "generated artifact-map doc"
   validate_output_file "docs/agents/issue-tracker.md" "generated tracker doc"
   validate_output_file "docs/agents/domain.md" "generated domain doc"
+  validate_mcp_config
 }
 
 prompt_dest_dir() {
@@ -804,9 +946,15 @@ render_install_lines() {
   if [ "$SKILL_SCOPE" = Project ]; then
     printf '+ (cd %q && pi install --local npm:pi-subagents)\n' "$PROJECT"
     printf '+ (cd %q && pi install --local npm:pi-intercom)\n' "$PROJECT"
+    if [ "$TRACKER_PROFILE" = epiq ]; then
+      printf '+ (cd %q && pi install --local npm:pi-mcp-adapter)\n' "$PROJECT"
+    fi
     printf '%s\n' '+ merge global subagent model/thinking settings into .pi/settings.json (fills missing fields only; never overwrites project choices)'
   else
     printf '%s\n' '+ pi install npm:pi-subagents' '+ pi install npm:pi-intercom'
+    if [ "$TRACKER_PROFILE" = epiq ]; then
+      printf '%s\n' '+ pi install npm:pi-mcp-adapter'
+    fi
   fi
 }
 
@@ -918,6 +1066,13 @@ render_workflow_block() {
 ### Routing and authority
 
 - Read `docs/agents/artifacts.md` for the project artifact mapping and load the `planning-contract` skill for artifact classification and planning handoffs; read `docs/agents/issue-tracker.md` and `docs/agents/domain.md` when their scope applies. Preserve established project conventions.
+EOF
+  if [ "$TRACKER_PROFILE" = epiq ]; then
+    cat <<'EOF'
+- When the tracker is Epiq, follow the Epiq workflow guidance and use `epiq_*` MCP tools for board operations; never use the `epiq` CLI or edit Epiq state files directly. Setup configures the MCP server but never initializes an Epiq board or project.
+EOF
+  fi
+  cat <<'EOF'
 - Use `shape-design` for unresolved behavior/design choices, `write-implementation-plan` for approved multi-step work, and `orchestrate-implementation` to execute approved work. Do not turn a trivial edit into a planning exercise.
 - Default orchestrated execution to `supervised`: builtin `worker` may implement and validate, but candidate assembly, integration, and publication retain explicit approval gates.
 - Route implementation to builtin `worker` and, when required by the selected policy, independent review to a fresh read-only builtin `reviewer`; confirm both are executable before dispatch and record the resolved names in the run manifest.
@@ -955,7 +1110,14 @@ render_tracker_doc() {
   echo
   echo "Tracker: $TRACKER."
   echo
-  if [ "$TRACKER" = "GitHub Issues" ]; then
+  if [ "$TRACKER_PROFILE" = epiq ]; then
+    cat <<'EOF'
+Tickets are tracked on the project's Epiq board through the `epiq_*` MCP tools.
+Follow the Epiq workflow guidance for board operations; do not use the `epiq` CLI or edit Epiq state files directly.
+The MCP server is configured by setup, but setup never initializes an Epiq board or project; do that explicitly when the project is ready.
+Sync is explicit: call `epiq_sync` when you need to pull or publish board state.
+EOF
+  elif [ "$TRACKER" = "GitHub Issues" ]; then
     echo "Tickets are GitHub issues in this repository. Use the GitHub CLI (gh) to read and manage them."
   elif [ "$TRACKER" = "Local Markdown" ]; then
     echo "Tickets are Markdown files under docs/tickets/."
@@ -1145,6 +1307,19 @@ stat_sig() {
   echo "$s:$(file_mode "$1")"
 }
 
+mcp_config_preview_action() {
+  [ -n "$MCP_CONFIG_PATH" ] || return 0
+  if ! command -v node >/dev/null 2>&1; then
+    echo "requires node to render"
+  elif [ ! -e "$MCP_CONFIG_PATH" ]; then
+    echo "new file"
+  elif mcp_config_merge | cmp -s - "$MCP_CONFIG_PATH"; then
+    echo "unchanged"
+  else
+    echo "merged (existing entries preserved)"
+  fi
+}
+
 print_preview() {
   local inst_doc="$PROJECT/$INSTRUCTION_FILE"
   local artifacts_doc="$PROJECT/docs/agents/artifacts.md"
@@ -1161,6 +1336,15 @@ print_preview() {
   render_install_lines
   echo
   require_prereqs report
+  if [ -n "$MCP_CONFIG_PATH" ]; then
+    echo
+    echo "--- MCP config: $MCP_CONFIG_PATH ($(mcp_config_preview_action)) ---"
+    if command -v node >/dev/null 2>&1; then
+      mcp_config_merge
+    else
+      echo "MCP config preview unavailable until node is installed."
+    fi
+  fi
   echo
   echo "--- prompt commands (copied to $(prompt_dest_dir)) ---"
   for pf in $(package_prompt_files); do
@@ -1233,10 +1417,35 @@ prepare_target() {
   fi
 }
 
+stage_mcp_config() {
+  [ -n "$MCP_CONFIG_PATH" ] || return 0
+  validate_mcp_config
+  MCP_CONFIG_STAGE="$ORCH_WORK/mcp-config"
+  mcp_config_merge >"$MCP_CONFIG_STAGE" || die "failed to stage MCP config $MCP_CONFIG_PATH (nothing has been modified)"
+  if [ -f "$MCP_CONFIG_PATH" ]; then
+    MCP_CONFIG_EXIST=yes
+    MCP_CONFIG_SIG=$(stat_sig "$MCP_CONFIG_PATH")
+    MCP_CONFIG_MODE=$(file_mode "$MCP_CONFIG_PATH")
+    if cmp -s "$MCP_CONFIG_STAGE" "$MCP_CONFIG_PATH"; then
+      MCP_CONFIG_ACTION=unchanged
+    else
+      MCP_CONFIG_ACTION=updated
+    fi
+  else
+    MCP_CONFIG_EXIST=no
+    MCP_CONFIG_SIG=
+    MCP_CONFIG_MODE=644
+    MCP_CONFIG_ACTION=created
+  fi
+  chmod "$MCP_CONFIG_MODE" "$MCP_CONFIG_STAGE" || die "failed to stage MCP config $MCP_CONFIG_PATH (nothing has been modified)"
+}
+
 stage_files() {
   validate_project_outputs
   ORCH_WORK=$(mktemp -d "${TMPDIR:-/tmp}/pi-orchestrator-setup.XXXXXX")
   trap 'test -z "${ORCH_WORK:-}" || rm -rf "$ORCH_WORK"' EXIT
+  stage_mcp_config
+  [ -n "$PROJECT" ] || return 0
   render_instruction_file >"$ORCH_WORK/instruction"
   render_artifacts_doc >"$ORCH_WORK/artifacts"
   render_tracker_doc >"$ORCH_WORK/tracker"
@@ -1259,6 +1468,38 @@ stage_files() {
 
 concurrent_change_error() {
   echo "error: destination changed concurrently or is no longer a regular file: $1; rerun setup to converge" >&2
+}
+
+install_mcp_config() {
+  [ -n "$MCP_CONFIG_PATH" ] || return 0
+  local dir tmp
+  dir=$(dirname "$MCP_CONFIG_PATH")
+  if [ ! -d "$dir" ]; then
+    mkdir -p "$dir" || die "MCP config directory creation failed: $dir. Rerun setup to converge."
+  fi
+  refuse_mcp_symlink_ancestors "$MCP_CONFIG_PATH"
+  if [ "$MCP_CONFIG_EXIST" = yes ]; then
+    if [ ! -f "$MCP_CONFIG_PATH" ] || [ "$(stat_sig "$MCP_CONFIG_PATH")" != "$MCP_CONFIG_SIG" ]; then
+      concurrent_change_error "$MCP_CONFIG_PATH"
+      return 1
+    fi
+  elif [ -e "$MCP_CONFIG_PATH" ] || [ -L "$MCP_CONFIG_PATH" ]; then
+    concurrent_change_error "$MCP_CONFIG_PATH"
+    return 1
+  fi
+  if [ "$MCP_CONFIG_ACTION" = unchanged ]; then
+    return 0
+  fi
+  tmp=$(mktemp "$dir/.pi-orchestrator-mcp.XXXXXX") || return 1
+  if ! cat "$MCP_CONFIG_STAGE" >"$tmp" || ! chmod "$MCP_CONFIG_MODE" "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  refuse_mcp_symlink_ancestors "$MCP_CONFIG_PATH"
+  if ! mv -f "$tmp" "$MCP_CONFIG_PATH"; then
+    rm -f "$tmp"
+    return 1
+  fi
 }
 
 install_doc() {
@@ -1416,6 +1657,9 @@ run_installs() {
   local desc="pi install${scope_flag:+ $scope_flag}"
   exec_install "$desc npm:pi-subagents" pi install $scope_flag npm:pi-subagents
   exec_install "$desc npm:pi-intercom" pi install $scope_flag npm:pi-intercom
+  if [ "$TRACKER_PROFILE" = epiq ]; then
+    exec_install "$desc npm:pi-mcp-adapter" pi install $scope_flag npm:pi-mcp-adapter
+  fi
 }
 
 install_prompts() {
@@ -1452,11 +1696,10 @@ apply_phase() {
     esac
   fi
   require_prereqs enforce
-  if [ -n "$PROJECT" ]; then
-    stage_files
-  fi
+  stage_files
   run_installs
   POST_INSTALL=true
+  install_mcp_config || die "MCP config write failed; rerun setup to converge."
   install_prompts
   harmonize_subagent_models
   if [ -n "$PROJECT" ]; then
@@ -1471,6 +1714,9 @@ apply_phase() {
     echo "  docs/agents/issue-tracker.md: ${T_ACTION[2]:-written}"
     echo "  docs/agents/domain.md: ${T_ACTION[3]:-written}"
   fi
+  if [ -n "$MCP_CONFIG_PATH" ]; then
+    echo "  Epiq MCP config: $MCP_CONFIG_PATH (${MCP_CONFIG_ACTION:-written})"
+  fi
   print_setup_overview
 }
 
@@ -1480,11 +1726,13 @@ suggested_command() {
     cmd="$cmd --project $(printf '%q' "$PROJECT")"
   else
     cmd="$cmd --skip-project"
+    [ "$TRACKER_PROFILE" = epiq ] && cmd="$cmd --tracker epiq"
   fi
   if [ -n "$PROJECT" ]; then
     cmd="$cmd --instruction-file ${INSTRUCTION_FILE:-AGENTS.md}"
     case "${TRACKER:-GitHub Issues}" in
     "GitHub Issues") tflag=github ;;
+    "Epiq") tflag=epiq ;;
     "Local Markdown") tflag=local ;;
     *) tflag=other ;;
     esac
@@ -1537,10 +1785,17 @@ inspect_report() {
     echo "  tracker: ${TRACKER:-?} [$TRACKER_STATUS] $TRACKER_NOTE"
     echo "  domain-layout: ${DOMAIN_LAYOUT:-?} [$LAYOUT_STATUS] $LAYOUT_NOTE"
   else
-    echo "  instruction-file / tracker / domain-layout: not applicable without --project"
+    if [ "$TRACKER_PROFILE" = epiq ]; then
+      echo "  tracker: Epiq [$TRACKER_STATUS] $TRACKER_NOTE"
+    else
+      echo "  instruction-file / tracker / domain-layout: not applicable without --project"
+    fi
   fi
   echo "  skill-scope: ${SKILL_SCOPE:-?} [$SCOPE_STATUS] $SCOPE_NOTE"
   echo "  prompt-command destination: $(prompt_dest_dir)"
+  if [ -n "$MCP_CONFIG_PATH" ]; then
+    echo "  Epiq MCP config: $MCP_CONFIG_PATH [$MCP_CONFIG_STATUS] $MCP_CONFIG_NOTE"
+  fi
   if [ -n "$PROJECT" ]; then
     echo "Generated docs:"
     if artifacts_doc_requires_replace "$PROJECT/docs/agents/artifacts.md"; then

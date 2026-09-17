@@ -246,11 +246,165 @@ test_installs_pi_packages_and_external_skills() {
   (cd "$TMP" && "$ROOT/setup.sh" --skip-project --yes) >/dev/null 2>&1
   assert_contains "$TEST_CALLS" "pi install npm:pi-subagents"
   assert_contains "$TEST_CALLS" "pi install npm:pi-intercom"
+  assert_not_contains "$TEST_CALLS" "pi-mcp-adapter"
   assert_not_contains "$TEST_CALLS" "skills add $ROOT"
   assert_file "$HOME/.pi/agent/prompts/setup-implementation-orchestrator.md"
   assert_file "$HOME/.pi/agent/prompts/implement.md"
   assert_contains "$HOME/.pi/agent/prompts/implement.md" "orchestrate-implementation"
   assert_no_file "$TMP/project/.pi/prompts/implement.md"
+}
+
+test_epiq_project_scope_configures_mcp() {
+  new_case
+  stub_commands
+  real_node_stub
+  mkdir -p "$TMP/project/.pi"
+  cat >"$TMP/project/.mcp.json" <<'EOF'
+{
+  "mcpServers": {
+    "existing": { "command": "existing-server" }
+  },
+  "settings": { "keep": true }
+}
+EOF
+  "$ROOT/setup.sh" --project "$TMP/project" --skill-scope project --yes \
+    --instruction-file AGENTS.md --tracker epiq --domain-layout single \
+    </dev/null >/dev/null 2>&1
+  assert_contains "$TEST_CALLS" "pi install --local npm:pi-mcp-adapter"
+  assert_eq "$(grep -c 'pi-mcp-adapter' "$TEST_CALLS" | tr -d ' ')" "1"
+  assert_file "$TMP/project/.mcp.json"
+  "$NODE" -e '
+    const c = require(process.argv[1]);
+    const e = c.mcpServers.epiq;
+    if (!c.settings.keep || c.mcpServers.existing.command !== "existing-server") throw new Error("existing MCP config was not preserved");
+    if (e.command !== "npx" || e.lifecycle !== "lazy" || e.args.join(" ") !== "-y -p epiq epiq-mcp") throw new Error("wrong Epiq server: " + JSON.stringify(e));
+  ' "$TMP/project/.mcp.json" || fail "project Epiq MCP config is wrong"
+  assert_contains "$TMP/project/docs/agents/issue-tracker.md" "Tracker: Epiq."
+  assert_contains "$TMP/project/docs/agents/issue-tracker.md" "epiq_*"
+  assert_contains "$TMP/project/AGENTS.md" "never initializes an Epiq board or project"
+  assert_no_file "$TMP/project/.epiq"
+  cp "$TMP/project/.mcp.json" "$TMP/mcp-before"
+  "$ROOT/setup.sh" --project "$TMP/project" --skill-scope project --yes \
+    --instruction-file AGENTS.md --tracker epiq --domain-layout single \
+    </dev/null >/dev/null 2>&1
+  cmp -s "$TMP/mcp-before" "$TMP/project/.mcp.json" || fail "Epiq MCP config rerun was not byte-identical"
+}
+
+test_epiq_tracker_detection_configures_mcp() {
+  new_case
+  stub_commands
+  real_node_stub
+  mkdir -p "$TMP/project/docs/agents"
+  printf '# Issue tracker\n\nTracker: Epiq.\n' >"$TMP/project/docs/agents/issue-tracker.md"
+  "$ROOT/setup.sh" --project "$TMP/project" --skill-scope project --yes \
+    --instruction-file AGENTS.md --domain-layout single \
+    </dev/null >/dev/null 2>&1
+  assert_contains "$TEST_CALLS" "pi install --local npm:pi-mcp-adapter"
+  assert_file "$TMP/project/.mcp.json"
+  assert_contains "$TMP/project/AGENTS.md" "epiq_*"
+}
+
+test_epiq_global_scope_configures_global_mcp() {
+  new_case
+  stub_commands
+  real_node_stub
+  mkdir -p "$HOME/.config/mcp"
+  cat >"$HOME/.config/mcp/mcp.json" <<'EOF'
+{
+  "mcpServers": { "existing": { "command": "existing-server" } }
+}
+EOF
+  "$ROOT/setup.sh" --skip-project --tracker epiq --skill-scope global --yes \
+    </dev/null >/dev/null 2>&1
+  assert_contains "$TEST_CALLS" "pi install npm:pi-mcp-adapter"
+  assert_file "$HOME/.config/mcp/mcp.json"
+  "$NODE" -e '
+    const c = require(process.argv[1]);
+    if (c.mcpServers.existing.command !== "existing-server" || c.mcpServers.epiq.args[3] !== "epiq-mcp") throw new Error("global MCP merge lost data");
+  ' "$HOME/.config/mcp/mcp.json" || fail "global Epiq MCP config is wrong"
+  assert_no_file "$TMP/project/.mcp.json"
+}
+
+test_epiq_mcp_conflict_fails_before_installs() {
+  new_case
+  stub_commands
+  real_node_stub
+  cat >"$TMP/project/.mcp.json" <<'EOF'
+{
+  "mcpServers": { "epiq": { "command": "user-selected-server" } }
+}
+EOF
+  before=$(shasum <"$TMP/project/.mcp.json")
+  out=$("$ROOT/setup.sh" --project "$TMP/project" --skill-scope project --yes \
+    --instruction-file AGENTS.md --tracker epiq --domain-layout single \
+    </dev/null 2>&1) && fail "conflicting Epiq MCP server was overwritten"
+  printf '%s\n' "$out" >"$TMP/out"
+  assert_contains "$TMP/out" "different settings"
+  assert_eq "$(shasum <"$TMP/project/.mcp.json")" "$before"
+  assert_calls_empty
+  assert_no_file "$TMP/project/AGENTS.md"
+
+  new_case
+  stub_commands
+  real_node_stub
+  printf '{not-json\n' >"$TMP/project/.mcp.json"
+  out=$("$ROOT/setup.sh" --project "$TMP/project" --skill-scope project --yes \
+    --instruction-file AGENTS.md --tracker epiq --domain-layout single \
+    </dev/null 2>&1) && fail "invalid MCP JSON was accepted"
+  assert_contains <(printf '%s\n' "$out") "invalid JSON"
+  assert_calls_empty
+  assert_no_file "$TMP/project/AGENTS.md"
+}
+
+test_epiq_approval_gates_config_and_adapter() {
+  new_case
+  stub_commands
+  real_node_stub
+  printf 'n\n' | "$ROOT/setup.sh" --project "$TMP/project" --skill-scope project \
+    --instruction-file AGENTS.md --tracker epiq --domain-layout single \
+    >/dev/null 2>&1
+  assert_calls_empty
+  assert_no_file "$TMP/project/.mcp.json"
+  assert_no_file "$TMP/project/AGENTS.md"
+}
+
+test_epiq_mcp_config_is_safely_staged() {
+  new_case
+  stub_commands
+  real_node_stub
+  ln -s "$TMP/project/elsewhere.json" "$TMP/project/.mcp.json"
+  out=$("$ROOT/setup.sh" --project "$TMP/project" --skill-scope project --dry-run \
+    --instruction-file AGENTS.md --tracker epiq --domain-layout single \
+    </dev/null 2>&1) && fail "MCP config symlink was accepted"
+  assert_contains <(printf '%s\n' "$out") "MCP config symlink"
+  assert_calls_empty
+  test -L "$TMP/project/.mcp.json" || fail "MCP config symlink was modified"
+
+  new_case
+  stub_commands
+  real_node_stub
+  out=$("$ROOT/setup.sh" --project "$TMP/project" --skill-scope project --dry-run \
+    --instruction-file AGENTS.md --tracker epiq --domain-layout single \
+    </dev/null 2>&1) || fail "Epiq dry-run failed"
+  printf '%s\n' "$out" >"$TMP/out"
+  local project_abs
+  project_abs=$(cd "$TMP/project" && pwd -P)
+  assert_contains "$TMP/out" "MCP config: $project_abs/.mcp.json (new file)"
+  assert_contains "$TMP/out" '"epiq"'
+  assert_contains "$TMP/out" '"lifecycle": "lazy"'
+  assert_calls_empty
+  assert_no_file "$TMP/project/.mcp.json"
+
+  new_case
+  stub_commands
+  real_node_stub
+  export TEST_FAIL_PROG=pi TEST_FAIL_AT=3
+  out=$("$ROOT/setup.sh" --project "$TMP/project" --skill-scope project --yes \
+    --instruction-file AGENTS.md --tracker epiq --domain-layout single \
+    </dev/null 2>&1) && fail "failed adapter install was accepted"
+  assert_contains <(printf '%s\n' "$out") "external installation failed"
+  assert_no_file "$TMP/project/.mcp.json"
+  assert_no_file "$TMP/project/AGENTS.md"
 }
 
 test_dry_run_writes_nothing() {
@@ -716,6 +870,10 @@ test_single_setup_entrypoint() {
   assert_contains "$prompt" "--yes"
   assert_contains "$prompt" "--replace-custom"
   assert_contains "$prompt" "legout/skills"
+  assert_contains "$prompt" "--tracker"
+  assert_contains "$prompt" "pi-mcp-adapter"
+  assert_contains "$prompt" ".mcp.json"
+  assert_contains "$prompt" "Setup does not initialize an Epiq board or project"
   assert_contains "$prompt" "record the resolved names in the run manifest"
   assert_contains "$prompt" '$@'
   test ! -e "$ROOT/prompts/init-orchestrator-project.md"
