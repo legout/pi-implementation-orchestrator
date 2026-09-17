@@ -52,6 +52,31 @@ For a pinned tag or commit, append `@<ref>` to the Git source. A direct alternat
 
 Use `--update` (or include `update`/`upgrade` in the Pi prompt input) to update an existing installation without reinstalling the stack. Update mode reads the selected scope's local skill-lock and Pi settings, runs `npx skills update` only for installed `legout/skills` entries, and runs `pi update` only for installed unpinned Pi packages. Missing or pinned components are reported and skipped; use normal setup to install missing dependencies. A skill with the same name from another source or a Pi package configured in both scopes stops before mutation rather than updating the wrong owner/scope. Managed prompts and project files are refreshed only when their rendered bytes changed. This mode uses the current orchestrator package; update that package separately with `pi update git:github.com/legout/pi-implementation-orchestrator`.
 
+Use `--migrate-namespace` (or say `migrate` in the Pi prompt input) to move an existing legacy `docs/` artifact installation to the `project/` namespace automatically. Setup previews every move (`docs/agents`, `docs/research`, `docs/adr`, `docs/specs`, `docs/plans`, `docs/tickets` → their `project/` counterparts), refuses when a target already exists or a path is a symlink, moves directories with `git mv` inside a tracked repository (plain `mv` otherwise) only after approval, and regenerates the three managed docs and the instruction-file block at the new namespace — content files are preserved byte-for-byte. Moves run after external installs, so a failed install still leaves the project untouched; an interrupted migration converges on rerun. Everything else under `docs/` stays where it is.
+
+### Direct setup without the prompt
+
+The `/setup-implementation-orchestrator` prompt needs no checkout — it locates the installed package's `setup.sh` itself. To run setup directly from a terminal instead:
+
+**Projects that have the package installed** — the git-backed package is a full clone, version-managed by pi:
+
+```bash
+~/.pi/agent/git/github.com/legout/pi-implementation-orchestrator/setup.sh --project . --dry-run
+```
+
+Keep it fresh with `pi update git:github.com/legout/pi-implementation-orchestrator`.
+
+**Any machine, no package or prompt needed** — bootstrap from a pinned release tarball (`setup.sh` needs the package's `prompts/` directory, so it is not standalone; download-then-run also preserves interactive approval, which piping into `bash` would break):
+
+```bash
+dir=$(mktemp -d) && curl -fsSL -o "$dir/repo.tgz" \
+  https://github.com/legout/pi-implementation-orchestrator/archive/refs/tags/v0.3.0.tar.gz \
+  && tar -xzf "$dir/repo.tgz" -C "$dir" \
+  && "$dir/pi-implementation-orchestrator-v0.3.0/setup.sh" --project .
+```
+
+The same flow works for first initialization; optionally follow with `pi install git:github.com/legout/pi-implementation-orchestrator` to keep the package itself pi-managed (setup copies the prompt commands either way). Pin to a commit via `archive/<sha>.tar.gz` when you need an exact tree.
+
 > **Breaking change:** the `--planning matt|superpowers|both` flag was removed. Setup now installs one consolidated planning stack from `legout/skills`; older commands fail with "unknown flag". Remove `--planning <profile>` from saved commands.
 
 ## Installed skills

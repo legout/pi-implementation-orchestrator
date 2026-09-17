@@ -645,6 +645,87 @@ test_legacy_docs_namespace_is_grandfathered() {
   cmp -s "$TMP/artifacts-1" "$TMP/project/docs/agents/artifacts.md" || fail "legacy rerun not idempotent"
 }
 
+seed_legacy_project_for_migration() {
+  mkdir -p "$TMP/project/docs/research" "$TMP/project/docs/agents"
+  printf 'evidence note\n' >"$TMP/project/docs/research/note.md"
+  printf '# Issue tracker\n\nTracker: Local Markdown.\n' >"$TMP/project/docs/agents/issue-tracker.md"
+}
+
+run_migrate() {
+  "$ROOT/setup.sh" --project "$TMP/project" --migrate-namespace --yes \
+    --skill-scope global --instruction-file AGENTS.md --tracker local --domain-layout single \
+    "$@" </dev/null >"$TMP/out" 2>&1
+}
+
+test_migrate_namespace_moves_and_regenerates() {
+  new_case
+  stub_commands
+  seed_legacy_project_for_migration
+  run_migrate
+  assert_file "$TMP/project/project/research/note.md"
+  cmp -s <(printf 'evidence note\n') "$TMP/project/project/research/note.md" || fail "moved note content changed"
+  assert_file "$TMP/project/project/agents/artifacts.md"
+  assert_contains "$TMP/project/project/agents/artifacts.md" "- project/research/: investigations"
+  assert_no_file "$TMP/project/docs/research"
+  assert_no_file "$TMP/project/docs/agents/issue-tracker.md"
+  assert_contains "$TMP/project/AGENTS.md" '`project/agents/artifacts.md`'
+  assert_contains "$TMP/out" 'Namespace migration: moved docs/research -> project/research'
+}
+
+test_migrate_namespace_uses_git_mv_when_tracked() {
+  new_case
+  stub_commands
+  git -C "$TMP/project" init -q
+  seed_legacy_project_for_migration
+  git -C "$TMP/project" add docs
+  run_migrate
+  assert_file "$TMP/project/project/research/note.md"
+  git -C "$TMP/project" ls-files --error-unmatch project/research/note.md >/dev/null 2>&1 ||
+    fail "moved note not tracked at new path"
+  if git -C "$TMP/project" ls-files --error-unmatch docs/research/note.md >/dev/null 2>&1; then
+    fail "old path still tracked"
+  fi
+}
+
+test_migrate_namespace_refuses_collision() {
+  new_case
+  stub_commands
+  seed_legacy_project_for_migration
+  mkdir -p "$TMP/project/project/research"
+  out=$("$ROOT/setup.sh" --project "$TMP/project" --migrate-namespace --yes \
+    --skill-scope global --instruction-file AGENTS.md --tracker local --domain-layout single \
+    </dev/null 2>&1) && fail "collision accepted"
+  printf '%s\n' "$out" >"$TMP/out"
+  assert_contains "$TMP/out" 'cannot migrate docs/research: project/research already exists'
+  assert_file "$TMP/project/docs/research/note.md"
+  assert_calls_empty
+}
+
+test_migrate_namespace_dry_run_moves_nothing() {
+  new_case
+  stub_commands
+  seed_legacy_project_for_migration
+  "$ROOT/setup.sh" --project "$TMP/project" --migrate-namespace --dry-run \
+    --skill-scope global --instruction-file AGENTS.md --tracker local --domain-layout single \
+    </dev/null >"$TMP/out" 2>&1
+  assert_contains "$TMP/out" 'docs/research -> project/research'
+  assert_file "$TMP/project/docs/research/note.md"
+  assert_no_file "$TMP/project/project"
+  assert_calls_empty
+}
+
+test_migrate_namespace_rerun_is_noop() {
+  new_case
+  stub_commands
+  seed_legacy_project_for_migration
+  run_migrate
+  cp "$TMP/project/project/agents/artifacts.md" "$TMP/artifacts-1"
+  run_migrate
+  assert_contains "$TMP/out" 'no legacy docs/ artifact directories remain'
+  cmp -s "$TMP/artifacts-1" "$TMP/project/project/agents/artifacts.md" || fail "migrate rerun not idempotent"
+  assert_file "$TMP/project/project/research/note.md"
+}
+
 test_declined_confirmation_writes_nothing() {
   new_case
   stub_commands
@@ -1214,6 +1295,7 @@ test_single_setup_entrypoint() {
   assert_contains "$prompt" "--yes"
   assert_contains "$prompt" "--replace-custom"
   assert_contains "$prompt" "--update"
+  assert_contains "$prompt" "--migrate-namespace"
   assert_contains "$prompt" 'additional input `$@`'
   assert_contains "$prompt" "npx skills update"
   assert_contains "$prompt" "legout/skills"

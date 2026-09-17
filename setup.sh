@@ -13,6 +13,9 @@ INSPECT=false
 DRY_RUN_MODE=false
 ASSUME_YES=false
 REPLACE_CUSTOM=false
+MIGRATE_NAMESPACE=false
+MIGRATE_DIRS=(agents research adr specs plans tickets)
+MIGRATE_MOVES=()
 TRACKER_CUSTOM_APPROVED=false
 DOMAIN_CUSTOM_APPROVED=false
 ARTIFACTS_CUSTOM_APPROVED=false
@@ -93,7 +96,7 @@ Usage: ./setup.sh [--project PATH|--skip-project]
             [--reviewer-model keep|inherit|PROVIDER/MODEL]
             [--worker-thinking keep|inherit|off|minimal|low|medium|high|xhigh|max]
             [--reviewer-thinking keep|inherit|off|minimal|low|medium|high|xhigh|max]
-            [--update] [--inspect] [--dry-run] [--yes] [--replace-custom]
+            [--update] [--inspect] [--dry-run] [--yes] [--replace-custom] [--migrate-namespace]
 
 Modes:
   (default)  resolve choices (explicit flags or questions), validate, preview,
@@ -110,6 +113,11 @@ Modes:
              missing dependencies are reported but not installed
   --replace-custom  explicitly allow replacing unrecognized generated-doc
              content; combine with --yes for noninteractive apply
+  --migrate-namespace  move legacy docs/ artifact directories to project/ (git
+             mv inside a repository, plain mv otherwise) and regenerate the three
+             managed docs at the new namespace; requesting it approves that
+             regeneration. Moves run only after approval; partial moves are
+             converged by rerunning
   --yes      noninteractive approval AFTER validation and preview; skips only the
              final confirmation question, never validation
 
@@ -170,6 +178,10 @@ parse_args() {
       ;;
     --replace-custom)
       REPLACE_CUSTOM=true
+      shift
+      ;;
+    --migrate-namespace)
+      MIGRATE_NAMESPACE=true
       shift
       ;;
     --instruction-file)
@@ -264,6 +276,9 @@ parse_args() {
   if "$REPLACE_CUSTOM" && "$SKIP_PROJECT"; then
     bad_usage "--replace-custom requires --project PATH"
   fi
+  if "$MIGRATE_NAMESPACE" && "$SKIP_PROJECT"; then
+    bad_usage "--migrate-namespace requires --project PATH"
+  fi
   if [ -z "$PROJECT" ] && ! "$SKIP_PROJECT"; then
     bad_usage "choose either --project PATH or --skip-project"
   fi
@@ -293,12 +308,14 @@ resolve_project() {
 # Any existing legacy artifact directory keeps the whole project on docs/.
 resolve_project_namespace() {
   PROJECT_NS=project
-  local rel
-  for rel in docs/agents docs/research docs/adr docs/specs docs/plans docs/tickets; do
-    if [ -e "$PROJECT/$rel" ] || [ -L "$PROJECT/$rel" ]; then
-      PROJECT_NS=docs
-    fi
-  done
+  if ! "$MIGRATE_NAMESPACE"; then
+    local rel
+    for rel in docs/agents docs/research docs/adr docs/specs docs/plans docs/tickets; do
+      if [ -e "$PROJECT/$rel" ] || [ -L "$PROJECT/$rel" ]; then
+        PROJECT_NS=docs
+      fi
+    done
+  fi
   NS_AGENTS="$PROJECT_NS/agents"
   NS_ARTIFACTS="$NS_AGENTS/artifacts.md"
   NS_TRACKER="$NS_AGENTS/issue-tracker.md"
@@ -308,6 +325,34 @@ resolve_project_namespace() {
   NS_SPECS="$PROJECT_NS/specs/"
   NS_PLANS="$PROJECT_NS/plans/"
   NS_TICKETS="$PROJECT_NS/tickets/"
+}
+
+# --migrate-namespace moves legacy docs/ artifact directories into project/.
+# Targets are validated before approval; moves themselves run after external
+# installs, before staging, so failed installs leave the project untouched.
+validate_migrate_targets() {
+  MIGRATE_MOVES=()
+  "$MIGRATE_NAMESPACE" || return 0
+  [ -n "$PROJECT" ] || return 0
+  local rel
+  if [ -e "$PROJECT/project" ] || [ -L "$PROJECT/project" ]; then
+    [ -L "$PROJECT/project" ] && die "refusing to migrate through the symlink: $PROJECT/project (nothing has been modified)"
+    [ -d "$PROJECT/project" ] || die "cannot migrate into $PROJECT/project: exists and is not a directory (nothing has been modified)"
+    [ -w "$PROJECT/project" ] || die "cannot migrate into $PROJECT/project: not writable (nothing has been modified)"
+  fi
+  for rel in ${MIGRATE_DIRS[@]+"${MIGRATE_DIRS[@]}"}; do
+    if [ -e "$PROJECT/docs/$rel" ] || [ -L "$PROJECT/docs/$rel" ]; then
+      refuse_symlink_ancestors "docs/$rel"
+      if [ -e "$PROJECT/project/$rel" ] || [ -L "$PROJECT/project/$rel" ]; then
+        die "cannot migrate docs/$rel: project/$rel already exists; resolve it yourself outside setup (nothing has been modified)"
+      fi
+      MIGRATE_MOVES+=("docs/$rel -> project/$rel")
+    fi
+  done
+  if [ ${#MIGRATE_MOVES[@]} -gt 0 ]; then
+    [ -d "$PROJECT/docs" ] && [ -w "$PROJECT/docs" ] ||
+      die "cannot migrate out of $PROJECT/docs: not a writable directory (nothing has been modified)"
+  fi
 }
 
 ask_choice() {
@@ -871,6 +916,7 @@ EOF
 resolve_choices() {
   if [ -n "$PROJECT" ]; then
     resolve_project_namespace
+    validate_migrate_targets
     detect_instruction_file
     if [ "$INSTRUCTION_STATUS" = unresolved ] && [ "$MODE" != inspect ]; then
       if [ -f "$PROJECT/CLAUDE.md" ] && [ -f "$PROJECT/AGENTS.md" ]; then
@@ -1134,6 +1180,9 @@ validate_prompt_outputs() {
 
 resolve_custom_doc_decisions() {
   [ -n "$PROJECT" ] || return 0
+  # --migrate-namespace requests regeneration at the new namespace; that request
+  # is the explicit owner approval for replacing the three managed docs.
+  "$MIGRATE_NAMESPACE" && return 0
   local doc
   doc="$PROJECT/$NS_ARTIFACTS"
   if artifacts_doc_requires_replace "$doc" && ! "$REPLACE_CUSTOM"; then
@@ -1750,6 +1799,18 @@ print_preview() {
     fi
   fi
   echo
+  if "$MIGRATE_NAMESPACE"; then
+    echo "--- namespace migration (docs/ -> project/, run only after approval) ---"
+    if [ ${#MIGRATE_MOVES[@]} -gt 0 ]; then
+      local move
+      for move in ${MIGRATE_MOVES[@]+"${MIGRATE_MOVES[@]}"}; do
+        echo "  $move"
+      done
+    else
+      echo "  no legacy docs/ artifact directories; nothing to move"
+    fi
+    echo
+  fi
   echo "--- prompt commands (copied to $(prompt_dest_dir)) ---"
   for pf in $(package_prompt_files); do
     echo "  ${pf##*/}"
@@ -1774,23 +1835,26 @@ print_preview() {
 
 preview_doc_action() {
   local approved=false
+  if "$MIGRATE_NAMESPACE"; then
+    approved=true
+  fi
   if [ "$1" = "$PROJECT/$NS_ARTIFACTS" ] && artifacts_doc_requires_replace "$1"; then
     approved="$ARTIFACTS_CUSTOM_APPROVED"
-    if "$REPLACE_CUSTOM" || "$approved"; then
+    if "$REPLACE_CUSTOM" || "$MIGRATE_NAMESPACE" || "$approved"; then
       echo "custom content (replacement explicitly approved)"
     else
       echo "custom content (requires --replace-custom)"
     fi
   elif [ "$1" = "$PROJECT/$NS_TRACKER" ] && tracker_doc_requires_replace "$1"; then
     approved="$TRACKER_CUSTOM_APPROVED"
-    if "$REPLACE_CUSTOM" || "$approved"; then
+    if "$REPLACE_CUSTOM" || "$MIGRATE_NAMESPACE" || "$approved"; then
       echo "custom content (replacement explicitly approved)"
     else
       echo "custom content (requires --replace-custom)"
     fi
   elif [ "$1" = "$PROJECT/$NS_DOMAIN" ] && domain_doc_requires_replace "$1"; then
     approved="$DOMAIN_CUSTOM_APPROVED"
-    if "$REPLACE_CUSTOM" || "$approved"; then
+    if "$REPLACE_CUSTOM" || "$MIGRATE_NAMESPACE" || "$approved"; then
       echo "custom content (replacement explicitly approved)"
     else
       echo "custom content (requires --replace-custom)"
@@ -1807,13 +1871,20 @@ preview_doc_action() {
 prepare_target() {
   # usage: prepare_target IDX RELPATH STAGEFILE
   local idx="$1" rel="$2" stage="$3"
+  local staged="$PROJECT/$rel"
   refuse_symlink_ancestors "$rel"
   T_REL[$idx]=$rel
   T_STAGE[$idx]=$stage
-  if [ -f "$PROJECT/$rel" ]; then
+  # With --migrate-namespace the managed doc may still live at its legacy
+  # docs/ path; it is moved there before writing, so stage its current state.
+  if [ ! -f "$staged" ] && "$MIGRATE_NAMESPACE" && [ "${rel%%/*}" = project ] &&
+    [ -f "$PROJECT/docs/${rel#*/}" ]; then
+    staged="$PROJECT/docs/${rel#*/}"
+  fi
+  if [ -f "$staged" ]; then
     T_EXIST[$idx]=yes
-    T_SIG[$idx]=$(stat_sig "$PROJECT/$rel")
-    T_MODE[$idx]=$(file_mode "$PROJECT/$rel")
+    T_SIG[$idx]=$(stat_sig "$staged")
+    T_MODE[$idx]=$(file_mode "$staged")
   else
     T_EXIST[$idx]=no
     T_SIG[$idx]=""
@@ -2043,6 +2114,34 @@ write_project_files() {
   install_doc "$PROJECT/$INSTRUCTION_FILE" instruction 4 || handle_write_failure "$?" 4
 }
 
+migrate_legacy_namespace() {
+  "$MIGRATE_NAMESPACE" || return 0
+  if [ ${#MIGRATE_MOVES[@]} -eq 0 ]; then
+    echo "Namespace migration: no legacy docs/ artifact directories remain; nothing to move."
+    return 0
+  fi
+  local rel use_git
+  if git -C "$PROJECT" rev-parse --git-dir >/dev/null 2>&1; then
+    use_git=true
+  else
+    use_git=false
+  fi
+  [ -d "$PROJECT/project" ] || mkdir "$PROJECT/project" ||
+    die "namespace migration failed: cannot create $PROJECT/project; rerun setup to converge."
+  for rel in ${MIGRATE_DIRS[@]+"${MIGRATE_DIRS[@]}"}; do
+    [ -e "$PROJECT/docs/$rel" ] || [ -L "$PROJECT/docs/$rel" ] || continue
+    if "$use_git" && git -C "$PROJECT" ls-files --error-unmatch "docs/$rel" >/dev/null 2>&1; then
+      git -C "$PROJECT" mv "docs/$rel" "project/$rel" ||
+        die "namespace migration failed for docs/$rel; rerun setup to converge. External installs already performed remain installed."
+    else
+      mv "$PROJECT/docs/$rel" "$PROJECT/project/$rel" ||
+        die "namespace migration failed for docs/$rel; rerun setup to converge. External installs already performed remain installed."
+    fi
+    echo "Namespace migration: moved docs/$rel -> project/$rel"
+  done
+  STEPS_DONE="${STEPS_DONE:+$STEPS_DONE; }namespace migration (${#MIGRATE_MOVES[@]} directories)"
+}
+
 exec_install() {
   # usage: exec_install DESCRIPTION CMD...
   local desc="$1"
@@ -2129,6 +2228,7 @@ apply_phase() {
   stage_files
   run_installs
   [ -z "$STEPS_DONE" ] || POST_INSTALL=true
+  migrate_legacy_namespace
   install_mcp_config || die "MCP config write failed; rerun setup to converge."
   install_prompts
   harmonize_subagent_models
@@ -2194,6 +2294,9 @@ suggested_command() {
     cmd="$cmd --skill-scope global"
   fi
   [ "$OPERATION" != update ] || cmd="$cmd --update"
+  if "$MIGRATE_NAMESPACE"; then
+    cmd="$cmd --migrate-namespace"
+  fi
   cmd="$cmd --worker-model $(printf '%q' "$WORKER_MODEL_CHOICE")"
   cmd="$cmd --reviewer-model $(printf '%q' "$REVIEWER_MODEL_CHOICE")"
   cmd="$cmd --worker-thinking $WORKER_THINKING_CHOICE"
@@ -2232,6 +2335,14 @@ inspect_report() {
   fi
   echo "  skill-scope: ${SKILL_SCOPE:-?} [$SCOPE_STATUS] $SCOPE_NOTE"
   echo "  operation: $OPERATION"
+  if "$MIGRATE_NAMESPACE"; then
+    echo "  namespace migration: requested"
+    if [ ${#MIGRATE_MOVES[@]} -gt 0 ]; then
+      printf '    %s\n' ${MIGRATE_MOVES[@]+"${MIGRATE_MOVES[@]}"}
+    else
+      echo "    no legacy docs/ artifact directories; nothing to move"
+    fi
+  fi
   if [ "$OPERATION" = update ]; then
     echo "  existing installation: $_UPDATE_STATUS $_UPDATE_NOTE"
     echo "    skills to update: ${UPDATE_SKILLS[*]:-none}"
