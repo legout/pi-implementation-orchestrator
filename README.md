@@ -66,6 +66,15 @@ The `/setup-implementation-orchestrator` prompt needs no checkout — it locates
 
 Keep it fresh with `pi update git:github.com/legout/pi-implementation-orchestrator`.
 
+To turn that into a plain command, run setup once with `--bin-link` from the installed copy:
+
+```bash
+~/.pi/agent/git/github.com/legout/pi-implementation-orchestrator/setup.sh --skip-project --bin-link --yes
+pi-orchestrator-init --project . --update --dry-run   # from any directory afterwards
+```
+
+The symlink targets the pi-managed clone, so it keeps working across `pi update`; `pi remove` deletes the clone and leaves a dangling link to delete yourself. Setup refuses `--bin-link` from a checkout or extracted tarball (the link would dangle) and never overwrites an existing file or foreign symlink at `~/.local/bin/pi-orchestrator-init`.
+
 **Any machine, no package or prompt needed** — bootstrap from a pinned release tarball (`setup.sh` needs the package's `prompts/` directory, so it is not standalone; download-then-run also preserves interactive approval, which piping into `bash` would break):
 
 ```bash

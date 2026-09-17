@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added `--bin-link`: creates `~/.local/bin/pi-orchestrator-init` as an approval-gated symlink to the pi-managed clone's `setup.sh` (refused from checkouts/tarballs, collision-safe, no-op on rerun).
+
 ## 0.3.0 - 2026-09-17
 
 - Changed the default planning-artifact namespace from `docs/` to `project/` (`project/research|adr|specs|plans|tickets/`, `project/agents/`) so delivery artifacts no longer collide with product documentation. Existing installations with legacy `docs/` artifact directories keep their namespace automatically; setup never migrates or duplicates artifacts.

@@ -14,6 +14,8 @@ DRY_RUN_MODE=false
 ASSUME_YES=false
 REPLACE_CUSTOM=false
 MIGRATE_NAMESPACE=false
+BIN_LINK=false
+BIN_LINK_PATH=
 MIGRATE_DIRS=(agents research adr specs plans tickets)
 MIGRATE_MOVES=()
 TRACKER_CUSTOM_APPROVED=false
@@ -97,6 +99,7 @@ Usage: ./setup.sh [--project PATH|--skip-project]
             [--worker-thinking keep|inherit|off|minimal|low|medium|high|xhigh|max]
             [--reviewer-thinking keep|inherit|off|minimal|low|medium|high|xhigh|max]
             [--update] [--inspect] [--dry-run] [--yes] [--replace-custom] [--migrate-namespace]
+            [--bin-link]
 
 Modes:
   (default)  resolve choices (explicit flags or questions), validate, preview,
@@ -118,6 +121,10 @@ Modes:
              managed docs at the new namespace; requesting it approves that
              regeneration. Moves run only after approval; partial moves are
              converged by rerunning
+  --bin-link       create ~/.local/bin/pi-orchestrator-init as a symlink to this
+             package's setup.sh; requires running from the pi-managed clone
+             under ~/.pi/agent/git/ so the link survives pi update; never
+             overwrites an existing file or foreign symlink
   --yes      noninteractive approval AFTER validation and preview; skips only the
              final confirmation question, never validation
 
@@ -182,6 +189,10 @@ parse_args() {
       ;;
     --migrate-namespace)
       MIGRATE_NAMESPACE=true
+      shift
+      ;;
+    --bin-link)
+      BIN_LINK=true
       shift
       ;;
     --instruction-file)
@@ -913,6 +924,51 @@ EOF
   fi
 }
 
+# --bin-link creates ~/.local/bin/pi-orchestrator-init pointing at this
+# package's setup.sh. Only the pi-managed clone has a stable path that survives
+# pi update, so running from a checkout or extracted tarball is refused.
+resolve_bin_link() {
+  "$BIN_LINK" || return 0
+  BIN_LINK_PATH="$HOME/.local/bin/pi-orchestrator-init"
+  case "$ROOT" in
+  "$HOME"/.pi/agent/git/*) ;;
+  *) die "--bin-link requires running from the pi-managed package clone under ~/.pi/agent/git/; a link to a checkout or extracted tarball would dangle (nothing has been modified)" ;;
+  esac
+  local dir="$HOME/.local/bin"
+  if [ -e "$dir" ] || [ -L "$dir" ]; then
+    { [ -d "$dir" ] && [ ! -L "$dir" ]; } ||
+      die "--bin-link: $dir exists and is not a directory (nothing has been modified)"
+    [ -w "$dir" ] || die "--bin-link: $dir is not writable (nothing has been modified)"
+  fi
+  if [ -L "$BIN_LINK_PATH" ]; then
+    [ "$(readlink "$BIN_LINK_PATH")" = "$ROOT/setup.sh" ] ||
+      die "--bin-link: $BIN_LINK_PATH already points elsewhere; resolve it yourself outside setup (nothing has been modified)"
+  elif [ -e "$BIN_LINK_PATH" ]; then
+    die "--bin-link: $BIN_LINK_PATH exists and is not a symlink to this package (nothing has been modified)"
+  fi
+}
+
+bin_link_path_warning() {
+  case ":$PATH:" in
+  *":$HOME/.local/bin:"*) return 0 ;;
+  esac
+  echo "  Warning: $HOME/.local/bin is not on PATH; add it to use the pi-orchestrator-init command."
+}
+
+install_bin_link() {
+  "$BIN_LINK" || return 0
+  local dir="$HOME/.local/bin"
+  mkdir -p "$dir" || die "failed to create $dir; rerun setup to converge."
+  if [ -L "$BIN_LINK_PATH" ] && [ "$(readlink "$BIN_LINK_PATH")" = "$ROOT/setup.sh" ]; then
+    echo "Command symlink unchanged: $BIN_LINK_PATH -> $ROOT/setup.sh"
+    return 0
+  fi
+  ln -s "$ROOT/setup.sh" "$BIN_LINK_PATH" ||
+    die "failed to create command symlink $BIN_LINK_PATH; rerun setup to converge."
+  echo "Command symlink created: $BIN_LINK_PATH -> $ROOT/setup.sh"
+  bin_link_path_warning
+}
+
 resolve_choices() {
   if [ -n "$PROJECT" ]; then
     resolve_project_namespace
@@ -962,6 +1018,7 @@ resolve_choices() {
   resolve_subagent_settings
   resolve_mcp_config
   resolve_update_plan
+  resolve_bin_link
 }
 
 # Shared awk helper: literal (not regex) occurrence count of one token per line.
@@ -1811,6 +1868,12 @@ print_preview() {
     fi
     echo
   fi
+  if "$BIN_LINK"; then
+    echo "--- command symlink (created only after approval) ---"
+    echo "  $BIN_LINK_PATH -> $ROOT/setup.sh"
+    bin_link_path_warning
+    echo
+  fi
   echo "--- prompt commands (copied to $(prompt_dest_dir)) ---"
   for pf in $(package_prompt_files); do
     echo "  ${pf##*/}"
@@ -2231,6 +2294,7 @@ apply_phase() {
   migrate_legacy_namespace
   install_mcp_config || die "MCP config write failed; rerun setup to converge."
   install_prompts
+  install_bin_link
   harmonize_subagent_models
   if [ -n "$PROJECT" ]; then
     write_project_files
@@ -2296,6 +2360,9 @@ suggested_command() {
   [ "$OPERATION" != update ] || cmd="$cmd --update"
   if "$MIGRATE_NAMESPACE"; then
     cmd="$cmd --migrate-namespace"
+  fi
+  if "$BIN_LINK"; then
+    cmd="$cmd --bin-link"
   fi
   cmd="$cmd --worker-model $(printf '%q' "$WORKER_MODEL_CHOICE")"
   cmd="$cmd --reviewer-model $(printf '%q' "$REVIEWER_MODEL_CHOICE")"
@@ -2367,6 +2434,9 @@ inspect_report() {
     echo "    current values: unavailable until node is installed"
   fi
   echo "  prompt-command destination: $(prompt_dest_dir)"
+  if "$BIN_LINK"; then
+    echo "  command symlink: $BIN_LINK_PATH -> $ROOT/setup.sh"
+  fi
   if [ -n "$MCP_CONFIG_PATH" ]; then
     echo "  Epiq MCP config: $MCP_CONFIG_PATH [$MCP_CONFIG_STATUS] $MCP_CONFIG_NOTE"
   fi

@@ -726,6 +726,78 @@ test_migrate_namespace_rerun_is_noop() {
   assert_file "$TMP/project/project/research/note.md"
 }
 
+fake_pi_clone() {
+  local clone="$HOME/.pi/agent/git/github.com/legout/pi-implementation-orchestrator"
+  mkdir -p "$clone/prompts"
+  cp "$ROOT/setup.sh" "$clone/"
+  cp "$ROOT"/prompts/*.md "$clone/prompts/"
+  CLONE_SETUP="$clone/setup.sh"
+}
+
+test_bin_link_creates_command_symlink() {
+  new_case
+  stub_commands
+  fake_pi_clone
+  "$CLONE_SETUP" --skip-project --bin-link --yes --skill-scope global \
+    </dev/null >"$TMP/out" 2>&1
+  local link="$HOME/.local/bin/pi-orchestrator-init"
+  test -L "$link" || fail "command symlink missing"
+  assert_eq "$(readlink "$link")" "$CLONE_SETUP"
+  assert_contains "$TMP/out" 'Command symlink created'
+  assert_contains "$TMP/out" 'not on PATH'
+  # rerun is a no-op
+  "$CLONE_SETUP" --skip-project --bin-link --yes --skill-scope global \
+    </dev/null >"$TMP/out2" 2>&1
+  assert_contains "$TMP/out2" 'Command symlink unchanged'
+  assert_eq "$(readlink "$link")" "$CLONE_SETUP"
+}
+
+test_bin_link_refuses_non_pi_root() {
+  new_case
+  stub_commands
+  out=$("$ROOT/setup.sh" --skip-project --bin-link --dry-run </dev/null 2>&1) &&
+    fail "bin link from checkout accepted"
+  printf '%s\n' "$out" >"$TMP/out"
+  assert_contains "$TMP/out" 'pi-managed package clone'
+  assert_calls_empty
+  test ! -e "$HOME/.local/bin/pi-orchestrator-init" || fail "symlink created despite refusal"
+}
+
+test_bin_link_refuses_collisions() {
+  new_case
+  stub_commands
+  fake_pi_clone
+  mkdir -p "$HOME/.local/bin"
+  printf '#!/bin/sh\n' >"$HOME/.local/bin/pi-orchestrator-init"
+  out=$("$CLONE_SETUP" --skip-project --bin-link --yes --skill-scope global </dev/null 2>&1) &&
+    fail "existing regular file accepted"
+  printf '%s\n' "$out" >"$TMP/out"
+  assert_contains "$TMP/out" 'is not a symlink to this package'
+  test -f "$HOME/.local/bin/pi-orchestrator-init" || fail "existing file replaced"
+
+  new_case
+  stub_commands
+  fake_pi_clone
+  mkdir -p "$HOME/.local/bin"
+  ln -s /usr/bin/true "$HOME/.local/bin/pi-orchestrator-init"
+  out=$("$CLONE_SETUP" --skip-project --bin-link --yes --skill-scope global </dev/null 2>&1) &&
+    fail "foreign symlink accepted"
+  printf '%s\n' "$out" >"$TMP/out"
+  assert_contains "$TMP/out" 'already points elsewhere'
+  assert_eq "$(readlink "$HOME/.local/bin/pi-orchestrator-init")" "/usr/bin/true"
+}
+
+test_bin_link_dry_run_creates_nothing() {
+  new_case
+  stub_commands
+  fake_pi_clone
+  "$CLONE_SETUP" --skip-project --bin-link --dry-run --skill-scope global \
+    </dev/null >"$TMP/out" 2>&1
+  assert_contains "$TMP/out" 'pi-orchestrator-init'
+  test ! -e "$HOME/.local/bin" || fail "dry-run created the symlink directory"
+  assert_calls_empty
+}
+
 test_declined_confirmation_writes_nothing() {
   new_case
   stub_commands
