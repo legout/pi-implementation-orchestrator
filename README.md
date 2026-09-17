@@ -69,10 +69,10 @@ Keep it fresh with `pi update git:github.com/legout/pi-implementation-orchestrat
 **Any machine, no package or prompt needed** — bootstrap from a pinned release tarball (`setup.sh` needs the package's `prompts/` directory, so it is not standalone; download-then-run also preserves interactive approval, which piping into `bash` would break):
 
 ```bash
-dir=$(mktemp -d) && curl -fsSL -o "$dir/repo.tgz" \
+dir=$(mktemp -d) && mkdir "$dir/pkg" && curl -fsSL -o "$dir/repo.tgz" \
   https://github.com/legout/pi-implementation-orchestrator/archive/refs/tags/v0.3.0.tar.gz \
-  && tar -xzf "$dir/repo.tgz" -C "$dir" \
-  && "$dir/pi-implementation-orchestrator-v0.3.0/setup.sh" --project .
+  && tar -xzf "$dir/repo.tgz" -C "$dir/pkg" --strip-components=1 \
+  && "$dir/pkg/setup.sh" --project .
 ```
 
 The same flow works for first initialization; optionally follow with `pi install git:github.com/legout/pi-implementation-orchestrator` to keep the package itself pi-managed (setup copies the prompt commands either way). Pin to a commit via `archive/<sha>.tar.gz` when you need an exact tree.
