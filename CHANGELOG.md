@@ -2,11 +2,14 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-09-17
+
 - Changed the default planning-artifact namespace from `docs/` to `project/` (`project/research|adr|specs|plans|tickets/`, `project/agents/`) so delivery artifacts no longer collide with product documentation. Existing installations with legacy `docs/` artifact directories keep their namespace automatically; setup never migrates or duplicates artifacts.
 - Added explicit `--migrate-namespace` migration: previewed, approval-gated moves of legacy `docs/` artifact directories to `project/` (git-aware), with managed docs regenerated at the new namespace and user content preserved; interrupted migrations converge on rerun.
 - Added approval-gated `--update` support, including Pi prompt recognition of `update`/`upgrade` input, selected-scope installation checks, `npx skills update`/`pi update` for installed components, safe skips for missing or pinned dependencies, and byte-preserving managed-file refreshes.
 - Added optional, scope-aware `worker`/`reviewer` model and thinking selection. Existing global overrides are preserved by default; explicit choices update only selected fields and are shown in inspect/dry-run output before approval.
 - Added first-class Epiq tracker setup with conditional `pi-mcp-adapter` installation and safe, scope-selected `epiq-mcp` configuration merging for `.mcp.json` or `~/.config/mcp/mcp.json`.
+- Documented direct setup without the prompt: invoking the installed package copy's `setup.sh` and a pinned-tarball curl bootstrap usable for first initialization.
 
 ## 0.2.0 - 2026-09-15
 
