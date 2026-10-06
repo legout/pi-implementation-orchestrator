@@ -15,7 +15,7 @@ planning skills
   → separate publication authority
 ```
 
-The repository ships: `package.json` (the native Pi manifest), `setup.sh` (the safety-gated installer and project initializer), the `/setup-implementation-orchestrator` prompt, the lifecycle prompts (`/research`, `/shape`, `/plan`, `/implement`, `/integrate`, `/release`), and isolated shell tests. Runtime skills live in [`legout/skills`](https://github.com/legout/skills) and are installed by `setup.sh`. `pi-subagents` owns child lifecycle (fresh contexts, managed worktrees, missions, artifacts, review, recovery); `pi-intercom` is limited to named persistent read-only peers.
+The repository ships: `package.json` (the native Pi manifest), `setup.sh` (the safety-gated installer and project initializer), the `/setup-implementation-orchestrator` prompt, the lifecycle prompts (`/research`, `/shape`, `/plan`, `/implement`, `/integrate`, `/release`), and isolated shell tests. Runtime skills live in [`legout/skills`](https://github.com/legout/skills) and are installed by `setup.sh`. `pi-subagents` owns child lifecycle (fresh contexts, managed worktrees, missions, artifacts, review, recovery) as the default worker backend; `pi-intercom` serves named persistent read-only peers and `herdr-pane` lanes when a run selects visible pane workers; Paseo lanes are an optional named backend managed by the user's own Paseo daemon, not by setup.
 
 ## Prerequisites
 
@@ -125,7 +125,7 @@ A typical feature lifecycle:
 
 1. **Shape:** "Shape the design for X — ask me the open questions." `shape-design` interviews you, then runs its capture checkpoint: resolved terms go to the owning glossary (`CONTEXT.md` is created lazily only when the first term is actually resolved — "no new terms" is a valid outcome), and only qualifying decisions (costly to reverse, surprising, made among real alternatives) earn an ADR. Feasibility questions hand off to `prototype-question`; durable findings land in `project/research/` as evidence, never as authorization. After your approval, behavior and acceptance are written to `project/specs/`.
 2. **Plan:** "Write the implementation plan for the approved spec." `write-implementation-plan` produces the smallest executable map — tracer-bullet slices with files, interfaces, dependencies, validation obligations, and evidence. You approve it.
-3. **Implement:** "Implement the plan." `orchestrate-implementation` checks readiness first: an approved behavioral source is mandatory, and research alone or a draft spec refuses and routes back to shaping. It then dispatches one builtin `worker` per lane in managed worktrees and applies proportional validation and review.
+3. **Implement:** "Implement the plan." `orchestrate-implementation` checks readiness first: an approved behavioral source is mandatory, and research alone or a draft spec refuses and routes back to shaping. It then dispatches one worker per isolated lane through the selected backend (`pi-subagents` by default) and applies proportional validation and review.
 4. **Integrate:** "Merge the candidate." `merge-worktree` runs local integration; pushing and publication stay separate approvals.
 
 A bounded change collapses this: an approved issue with acceptance criteria goes straight to step 3 — no spec, plan, or tickets.
@@ -205,7 +205,7 @@ Documentation map: `CONTEXT.md` (domain vocabulary), `project/adr/` (decisions),
 
 ## Worker and reviewer contracts
 
-The orchestrator uses the `worker` and `reviewer` profiles shipped by `pi-subagents`; setup does not create or replace agent definitions. Optional setup choices update only selected `model`/`thinking` fields while preserving tools, other agents, and unknown settings; omitting them preserves existing global overrides. Before dispatch, confirm both profiles with `subagent({ action: "list", capabilities: true })`, verify their tool permissions match the role, and record the resolved names in the run manifest.
+The default Pi backend uses the `worker` and `reviewer` profiles shipped by `pi-subagents`; setup does not create or replace agent definitions. Optional setup choices update only selected `model`/`thinking` fields while preserving tools, other agents, and unknown settings; omitting them preserves existing global overrides. Before native dispatch, confirm selected profiles with `subagent({ action: "list", capabilities: true })`, verify their tool permissions match the role, and record the resolved names in the run manifest. Named Herdr/Paseo lanes use the skill's backend-specific preflight instead.
 
 Evidence is always mandatory; a new test is not. Every validation unit receives exactly one test obligation during preflight; related tasks may share a validation unit:
 
@@ -215,7 +215,7 @@ Evidence is always mandatory; a new test is not. Every validation unit receives 
 
 A worker may challenge its assigned obligation after inspection but must report why; it may never silently skip validation.
 
-- **Worker:** sole writer in one managed worktree; one bounded brief per run; report commit IDs, changed files, obligation, rationale, commands, results, and residual risks. No scope expansion, cross-lane integration, or publication.
+- **Worker:** sole writer in one isolated worktree; one bounded brief per run; report commit IDs, changed files, obligation, rationale, commands, results, and residual risks. No scope expansion, cross-lane integration, or publication.
 - **Review policy:** adaptive and orchestrator-owned — low-risk work uses parent diff inspection; normal-risk work gets one candidate review; high-risk or dependency-defining work gets immediate plus candidate review. `strict`, `final-only`, and `parent-only` are explicit alternatives.
 - **Immediate-review triggers:** public API/schema/shared contract; security/auth/permissions/secrets; money/data-loss/migration; concurrency/distributed behavior; broad cross-cutting diff; weak or missing checks; worker uncertainty/scope expansion; integration conflict; a task whose contract will be consumed before the next wave review.
 - **Candidate review:** verify the exact candidate range after accepted lanes are assembled. Reuse prior evidence only after checking correspondence; review previously unreviewed changes and integration effects, not settled findings again. Never blindly copy a verdict across branches or trees.
@@ -231,7 +231,7 @@ The parent dispositions findings **before repair**: reject failed gates in one l
 
 ## Herdr visibility
 
-Persistent peers (`architecture-peer`, `domain-peer`, `quality-peer`) run as explicitly named, read-only `pi-intercom` sessions in visible Herdr tabs. The builtin `worker` runs headless through `pi-subagents`; when the selected policy requires it, builtin `reviewer` is a fresh read-only child; optional inspector tabs attach read-only views. Peers never edit code, commit, integrate, or publish.
+Persistent peers (`architecture-peer`, `domain-peer`, `quality-peer`) run as explicitly named, read-only `pi-intercom` sessions in visible Herdr tabs. The builtin `worker` runs headless through `pi-subagents`; when the selected policy requires it, builtin `reviewer` is a fresh read-only child; optional inspector tabs attach read-only views. A run or lane may alternatively name `herdr-pane` (a fresh Pi pane/tab session, parent-allocated worktree, intercom identity handshake) or `paseo` (explicit repository/workspace binding; agent-scoped callbacks or explicit CLI result collection). Handoffs live outside disposable worker checkouts; backend choice never changes reconstruction, review, or publication gates. Peers remain read-only. Setup does not install Herdr, Paseo, or their external skills.
 
 ## Operations
 

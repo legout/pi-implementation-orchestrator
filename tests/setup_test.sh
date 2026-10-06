@@ -1057,6 +1057,8 @@ test_routing_authority_block() {
   assert_not_contains "$block" '`code-reviewer`'
   assert_contains "$block" 'record the resolved names in the run manifest'
   assert_contains "$block" 'Use `pi-subagents` for spawned-child lifecycle'
+  assert_contains "$block" 'Explicit run/lane selections may instead use `herdr-pane` or `paseo`'
+  assert_contains "$block" 'record and preflight the selected backend'
   assert_contains "$block" 'Use `systematic-debugging` for unexpected failures'
   assert_contains "$block" 'Use `merge-worktree` for target integration'
   assert_contains "$block" 'Local integration does not authorize pushing; opening a PR does not authorize merging'

@@ -1576,8 +1576,8 @@ EOF
   cat <<'EOF'
 - Use `shape-design` for unresolved behavior/design choices, `write-implementation-plan` for approved multi-step work, and `orchestrate-implementation` to execute approved work. Do not turn a trivial edit into a planning exercise.
 - Default orchestrated execution to `supervised`: builtin `worker` may implement and validate, but candidate assembly, integration, and publication retain explicit approval gates.
-- Route implementation to builtin `worker` and, when required by the selected policy, independent review to a fresh read-only builtin `reviewer`; confirm both are executable before dispatch and record the resolved names in the run manifest.
-- Keep one writer per worktree. Use `pi-subagents` for spawned-child lifecycle; named persistent `pi-intercom` peers are read-only advisors, not implementation or review agents.
+- Route implementation to builtin `worker` and, when required by the selected policy, independent review to a fresh read-only builtin `reviewer` by default; confirm selected roles are executable before dispatch and record the resolved names in the run manifest. Explicit run/lane selections may instead use `herdr-pane` or `paseo`; record and preflight the selected backend.
+- Keep one writer per isolated worktree. Use `pi-subagents` for spawned-child lifecycle, `pi-intercom` for Herdr lane communication, and Paseo's supported tools/CLI for Paseo lanes. Named persistent peers remain read-only advisors.
 - Use `systematic-debugging` for unexpected failures and `verification-before-completion` before success claims; match evidence to the exact change and report skipped checks.
 - Use `merge-worktree` for target integration and `make-release` for releases. Local integration does not authorize pushing; opening a PR does not authorize merging; release or publication requires its own approved plan.
 - Stop on conflicting authoritative sources, unclear ownership, failed required gates, or missing required tooling. Never silently switch execution modes to bypass a blocker.

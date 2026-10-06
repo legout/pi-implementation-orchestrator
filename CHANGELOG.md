@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Generated workflow guidance now permits explicit `herdr-pane` and `paseo` run/lane overrides while retaining default builtin Pi workers/reviewers and all approval gates; Herdr/Paseo dependencies remain separately managed.
+
 - Added `--bin-link`: creates `~/.local/bin/pi-orchestrator-init` as an approval-gated symlink to the pi-managed clone's `setup.sh` (refused from checkouts/tarballs, collision-safe, no-op on rerun).
 
 ## 0.3.0 - 2026-09-17

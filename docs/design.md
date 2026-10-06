@@ -29,7 +29,7 @@ planning skills
   → separate publication authority
 ```
 
-`pi-subagents` owns child lifecycle, worktrees, mission state, artifacts, review, and recovery. `pi-intercom` is limited to explicitly named persistent read-only advisors and visible cross-project peers.
+`pi-subagents` owns child lifecycle, worktrees, mission state, artifacts, review, and recovery as the default worker backend. `pi-intercom` serves explicitly named persistent read-only advisors, visible cross-project peers, and `herdr-pane` lanes when a run selects visible pane workers; Paseo lanes are an optional named backend managed by the user's own Paseo daemon, not by this installer.
 
 ## Repository Layout
 
@@ -101,7 +101,7 @@ Install exactly this set from `legout/skills`; no other upstream skill repositor
 - `make-release` — release publication.
 - `planning-contract` — shared planning artifact and handoff contract (classification defaults, capture checkpoint, approval/readiness rules, missing-contract refusal) consumed by the planning skills above; installed explicitly alongside them because the skills CLI does not resolve dependencies.
 
-The builtin `worker` gets TDD discipline through `orchestrate-implementation`; when the selected review policy requires it, the orchestrator supplies a fresh read-only builtin `reviewer`. Setup uses the profiles shipped by `pi-subagents` and never creates or replaces their definitions. Optional setup choices update only selected `model`/`thinking` fields while preserving tool configuration, other agents, and unknown keys. Confirm both are executable before dispatch and record the resolved names in the run manifest. Additional `legout/skills` entries (`capture-project-vision`, `doc-coauthoring`, `simplify-code`, `review-codebase-architecture`) are available but not installed by default.
+The builtin `worker` gets TDD discipline through `orchestrate-implementation`; when the selected review policy requires it, the orchestrator supplies a fresh read-only builtin `reviewer`. Setup uses the profiles shipped by `pi-subagents` and never creates or replaces their definitions. Optional setup choices update only selected `model`/`thinking` fields while preserving tool configuration, other agents, and unknown keys. Confirm selected native profiles are executable before dispatch and record them in the run manifest; explicitly selected Herdr/Paseo lanes use their backend-specific preflight and external runtime guidance. Additional `legout/skills` entries (`capture-project-vision`, `doc-coauthoring`, `simplify-code`, `review-codebase-architecture`) are available but not installed by default.
 
 ## Upstream Installation
 
@@ -155,7 +155,7 @@ If one of `CLAUDE.md` or `AGENTS.md` already exists, update that file. If both e
 Write or update one marked workflow block that documents:
 
 - risk-based validation-unit obligations (`new-test`, `existing-check`, `no-new-test`);
-- builtin `worker` and `reviewer` routing, with executable-profile preflight;
+- default builtin `worker`/`reviewer` routing, with executable-profile preflight and explicit `herdr-pane`/`paseo` run or lane overrides;
 - adaptive orchestrator-owned review with inline finding/security/test gates, parent disposition before repair, one fix pass plus one delta recheck, and a task/result reflection checkpoint;
 - routing and authority rules (which skill handles which decision — including loading the shared `planning-contract` skill and the `project/agents/artifacts.md` mapping — `supervised` default with explicit integration/publication gates, one writer per worktree, evidence discipline, merge/release authority);
 - a layout-aware documentation map — single-context references canonical root `CONTEXT.md`; multi-context references per-context glossaries and an optional `CONTEXT-MAP.md` and never declares a root `CONTEXT.md` canonical;
