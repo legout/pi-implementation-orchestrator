@@ -81,3 +81,7 @@ No fourth obligation class; no gated ladder; no changes to risk mapping, review 
 ## Capture checkpoint
 
 Vocabulary: two terms captured in `CONTEXT.md` (above). Decisions: no ADR — the change is cheaply reversible text; the linked research note records the why. Behavior: this document is the approved source. Uncertainty: none material blocking planning.
+
+## Runtime amendments (recorded at execution)
+
+- The managed-block word-budget guard in `tests/setup_test.sh` was raised 700→850 (parent-dispositioned during run ind-val-0001): the verbatim canonical text grows the generated block to 804 words; the guard's intent (boundedness) is preserved. Documented bounds in `README.md` and `docs/design.md` were aligned to "roughly 850 words" in the same run's authorized fix pass.
