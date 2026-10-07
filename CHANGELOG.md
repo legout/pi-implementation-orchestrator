@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- README now states the repository's role explicitly — the Pi distribution of the legout implementation stack, not a runtime orchestrator — and documents harness portability: the planning skills are pi-free and installable via the Agent Skills CLI to other agents, while `setup.sh`, the package manifest, lifecycle prompts, and settings wiring stay pi-only.
+
 - Generated workflow guidance now permits explicit `herdr-pane` and `paseo` run/lane overrides while retaining default builtin Pi workers/reviewers and all approval gates; Herdr/Paseo dependencies remain separately managed.
 
 - Added `--bin-link`: creates `~/.local/bin/pi-orchestrator-init` as an approval-gated symlink to the pi-managed clone's `setup.sh` (refused from checkouts/tarballs, collision-safe, no-op on rerun).

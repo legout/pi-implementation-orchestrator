@@ -2,6 +2,8 @@
 
 Plan features with the consolidated [`legout/skills`](https://github.com/legout/skills) planning stack, then execute the plans with builtin pi-subagents `worker` and `reviewer` profiles, risk-based validation obligations, proportional review, and orchestrator-owned integration.
 
+This repository is the Pi distribution of that stack — installer, setup prompt, and lifecycle prompts — not a runtime service. At execution time the orchestrator is your Pi session running the installed skills; the methodology itself lives in `legout/skills` and is mostly harness-neutral (see [Using the stack without pi](#using-the-stack-without-pi)).
+
 ## Architecture
 
 ```text
@@ -16,6 +18,16 @@ planning skills
 ```
 
 The repository ships: `package.json` (the native Pi manifest), `setup.sh` (the safety-gated installer and project initializer), the `/setup-implementation-orchestrator` prompt, the lifecycle prompts (`/research`, `/shape`, `/plan`, `/implement`, `/integrate`, `/release`), and isolated shell tests. Runtime skills live in [`legout/skills`](https://github.com/legout/skills) and are installed by `setup.sh`. `pi-subagents` owns child lifecycle (fresh contexts, managed worktrees, missions, artifacts, review, recovery) as the default worker backend; `pi-intercom` serves named persistent read-only peers and `herdr-pane` lanes when a run selects visible pane workers; Paseo lanes are an optional named backend managed by the user's own Paseo daemon, not by setup.
+
+## Using the stack without pi
+
+The methodology is mostly harness-neutral; only the delivery is pi-specific. The planning skills (`research`, `shape-design`, `grilling`, `domain-modeling`, `write-implementation-plan`, `planning-contract`) contain no pi assumptions and install into any agent the [Agent Skills CLI](https://skills.sh) supports — repeat per skill:
+
+```bash
+npx skills add legout/skills --skill research --global --agent <your-agent> --yes --copy
+```
+
+`orchestrate-implementation` is portable in its acceptance boundary — pinned base refs, patch and digest, parent-owned reconstruction — but dispatches through a backend reference (`pi-subagents`, `herdr-pane`, or `paseo`); another harness's worker mechanism would need its own dispatch reference added to the skill. What stays pi-only is this repository's own job: `setup.sh`, the native package manifest, the lifecycle prompt shortcuts, and the `subagents` settings wiring.
 
 ## Prerequisites
 
