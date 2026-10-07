@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The `new-test` validation obligation is now independence-first rather than test-first: one focused test at the cheapest stable public seam with expected values derived independently of the implementation under test (spec, acceptance criteria, or another oracle); failing-test-first is retained only for bug repros and behavior pinning before refactors. The generated Agent-workflow block (including new reviewer failure modes for generated tests), README, and design docs state the new semantics; the sibling `legout/skills` repo lands the matching skill-text changes in its own changelog entry.
+
 - README now states the repository's role explicitly — the Pi distribution of the legout implementation stack, not a runtime orchestrator — and documents harness portability: the planning skills are pi-free and installable via the Agent Skills CLI to other agents, while `setup.sh`, the package manifest, lifecycle prompts, and settings wiring stay pi-only.
 
 - Generated workflow guidance now permits explicit `herdr-pane` and `paseo` run/lane overrides while retaining default builtin Pi workers/reviewers and all approval gates; Herdr/Paseo dependencies remain separately managed.

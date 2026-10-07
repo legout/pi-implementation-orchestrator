@@ -603,7 +603,7 @@ test_initializes_agents_docs() {
   assert_file "$TMP/project/project/agents/domain.md"
   assert_file "$TMP/project/project/agents/artifacts.md"
   assert_contains "$TMP/project/AGENTS.md" "pi-implementation-orchestrator:start"
-  assert_contains "$TMP/project/AGENTS.md" "TDD"
+  assert_contains "$TMP/project/AGENTS.md" "one focused test at the cheapest stable public seam"
   assert_contains "$TMP/project/AGENTS.md" "orchestrator-owned"
   assert_contains "$TMP/project/project/agents/issue-tracker.md" "Tracker: Local Markdown."
   assert_contains "$TMP/project/project/agents/domain.md" "Layout: single context."
@@ -1024,7 +1024,9 @@ test_adaptive_review_and_test_policy() {
   new_case
   stub_commands
   printf '1\n1\n1\ny\n' | "$ROOT/setup.sh" --project "$TMP/project" >/dev/null 2>&1
-  assert_contains "$TMP/project/AGENTS.md" 'Every validation unit receives one test obligation: `new-test`, `existing-check`, or `no-new-test`; related tasks may share a validation unit, and focused TDD is required only for `new-test` work.'
+  assert_contains "$TMP/project/AGENTS.md" 'Every validation unit receives one test obligation: `new-test`, `existing-check`, or `no-new-test`; related tasks may share a validation unit. `new-test` means one focused test at the cheapest stable public seam with expected values derived independently of the implementation under test (spec, acceptance criteria, or another oracle); failing-test-first applies only to bug repros and behavior pinning before refactors. Prefer the cheapest stable check that satisfies the obligation — types/lint/build, then an existing focused check, then a new focused test.'
+  assert_not_contains "$TMP/project/AGENTS.md" 'focused TDD is required'
+  assert_not_contains "$TMP/project/AGENTS.md" 'one failing test first'
   assert_contains "$TMP/project/AGENTS.md" 'Review is adaptive and orchestrator-owned: low-risk work uses parent diff inspection; normal-risk work gets one candidate review; high-risk or dependency-defining work gets immediate plus candidate review.'
   for rule in 'agreed feature, then correctness, then proven risk' \
     'named requirement or written rule' 'caused or worsened' \
@@ -1063,11 +1065,11 @@ test_routing_authority_block() {
   assert_contains "$block" 'Use `merge-worktree` for target integration'
   assert_contains "$block" 'Local integration does not authorize pushing; opening a PR does not authorize merging'
   assert_contains "$block" 'Never silently switch execution modes to bypass a blocker.'
-  # Keep routing plus the inline guardrails bounded (formerly routing-only ~500).
+  # Keep routing plus the inline guardrails bounded (formerly routing-only ~500, then ~700 pre-independence-first).
   local words
   words=$(extract_block "$block" | wc -w | tr -d ' ')
-  if [ "$words" -gt 700 ]; then
-    fail "managed block is $words words (budget ~700)"
+  if [ "$words" -gt 850 ]; then
+    fail "managed block is $words words (budget ~850)"
   fi
 }
 

@@ -114,7 +114,7 @@ The same flow works for first initialization; optionally follow with `pi install
 | `prototype-question` | disposable feasibility spikes | hands off from `shape-design`'s Spike path |
 | `verification-before-completion` | evidence-before-claims discipline | Superpowers `verification-before-completion` |
 | `systematic-debugging` | reproduction and root-cause method | Matt's `diagnosing-bugs`, Superpowers `systematic-debugging` |
-| `orchestrate-implementation` | worker/reviewer orchestration | Superpowers worktree patterns; carries Matt's `tdd` guidance for `new-test` validation units |
+| `orchestrate-implementation` | worker/reviewer orchestration | Superpowers worktree patterns; carries independence-first focused-test guidance for `new-test` validation units |
 | `merge-worktree` | worktree integration | Superpowers `finishing-a-development-branch`; resolves conflicts inline (no `resolving-merge-conflicts` dependency) |
 | `make-release` | release publication | — |
 | `planning-contract` | shared planning artifact and handoff contract (classification defaults, capture checkpoint, approval/readiness rules) consumed by the other planning skills | — (locally authored in `legout/skills`; installed explicitly alongside its consumers) |
@@ -221,7 +221,7 @@ The default Pi backend uses the `worker` and `reviewer` profiles shipped by `pi-
 
 Evidence is always mandatory; a new test is not. Every validation unit receives exactly one test obligation during preflight; related tasks may share a validation unit:
 
-- **`new-test`** — changed behavior lacks meaningful existing coverage and a named reachable failure would otherwise be unprotected. Focused TDD is required only for `new-test` work: failing test → minimal implementation → passing focused check.
+- **`new-test`** — changed behavior lacks meaningful existing coverage and a named reachable failure would otherwise be unprotected. Add one focused test at the cheapest stable public seam. Expected values must be derived independently of the implementation under test — from the approved spec, acceptance criteria, or another oracle — never from reading the code under test. Ordering is the worker's choice, except: a bug fix requires a reproducing test that demonstrably fails before the fix lands, and a behavior-affecting refactor pins current behavior with a characterization test before mutation. Add further tests only for distinct material failure modes. When several checks would satisfy the obligation, prefer the cheapest stable one — types/lint/build, then an existing focused check, then a new focused test — and run the single focused check rather than the whole suite. Prefer the seam that would catch the named failure mode; when a unit seam and an integration seam cost the same, prefer the integration seam, and never mock the unit under test.
 - **`existing-check`** — an existing focused check already exercises the affected behavior. Add no redundant test; run and report that check.
 - **`no-new-test`** — a new test would prove little, including documentation, formatting, comments, static metadata, generated artifacts, mechanical changes, or behavior-neutral refactoring. Run the smallest meaningful parse, build, smoke check, or diff inspection.
 

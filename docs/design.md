@@ -96,12 +96,12 @@ Install exactly this set from `legout/skills`; no other upstream skill repositor
 - `prototype-question` — disposable spikes; `shape-design` hands feasibility questions to it.
 - `verification-before-completion` — evidence-before-claims discipline for the implementer.
 - `systematic-debugging` — reproduction and root-cause method for failing checks.
-- `orchestrate-implementation` — worker/reviewer orchestration; carries the TDD/test-seam guidance for `new-test` validation units.
+- `orchestrate-implementation` — worker/reviewer orchestration; carries the independence-first focused-test guidance for `new-test` validation units.
 - `merge-worktree` — worktree integration; resolves conflicts inline from source intent.
 - `make-release` — release publication.
 - `planning-contract` — shared planning artifact and handoff contract (classification defaults, capture checkpoint, approval/readiness rules, missing-contract refusal) consumed by the planning skills above; installed explicitly alongside them because the skills CLI does not resolve dependencies.
 
-The builtin `worker` gets TDD discipline through `orchestrate-implementation`; when the selected review policy requires it, the orchestrator supplies a fresh read-only builtin `reviewer`. Setup uses the profiles shipped by `pi-subagents` and never creates or replaces their definitions. Optional setup choices update only selected `model`/`thinking` fields while preserving tool configuration, other agents, and unknown keys. Confirm selected native profiles are executable before dispatch and record them in the run manifest; explicitly selected Herdr/Paseo lanes use their backend-specific preflight and external runtime guidance. Additional `legout/skills` entries (`capture-project-vision`, `doc-coauthoring`, `simplify-code`, `review-codebase-architecture`) are available but not installed by default.
+The builtin `worker` gets validation discipline through `orchestrate-implementation`; when the selected review policy requires it, the orchestrator supplies a fresh read-only builtin `reviewer`. Setup uses the profiles shipped by `pi-subagents` and never creates or replaces their definitions. Optional setup choices update only selected `model`/`thinking` fields while preserving tool configuration, other agents, and unknown keys. Confirm selected native profiles are executable before dispatch and record them in the run manifest; explicitly selected Herdr/Paseo lanes use their backend-specific preflight and external runtime guidance. Additional `legout/skills` entries (`capture-project-vision`, `doc-coauthoring`, `simplify-code`, `review-codebase-architecture`) are available but not installed by default.
 
 ## Upstream Installation
 
@@ -178,7 +178,7 @@ Re-running setup updates the one managed block and regenerates the three managed
 
 Validation evidence is mandatory; a new test is not. During preflight each validation unit receives exactly one obligation, and related tasks may share a validation unit:
 
-- `new-test`: changed behavior lacks meaningful existing coverage and a named reachable failure would otherwise be unprotected. Follow the TDD guidance carried by `orchestrate-implementation` and require failing-test, minimal-implementation, and passing-check evidence.
+- `new-test`: changed behavior lacks meaningful existing coverage and a named reachable failure would otherwise be unprotected. Add one focused test at the cheapest stable public seam. Expected values must be derived independently of the implementation under test — from the approved spec, acceptance criteria, or another oracle (an upstream contract, a real input/output pair, captured behavior) — never from reading the code under test. Ordering is the worker's choice, except: a bug fix requires a reproducing test that demonstrably fails before the fix lands, and a behavior-affecting refactor pins current behavior with a characterization test before mutation. Add further tests only for distinct material failure modes.
 - `existing-check`: an existing focused check already exercises the affected behavior. Run and report that check without adding redundant tests.
 - `no-new-test`: a new test would prove little, including documentation, formatting, comments, static metadata, generated artifacts, mechanical changes, or behavior-neutral refactoring. Run the smallest meaningful parse, build, smoke check, or diff inspection.
 
