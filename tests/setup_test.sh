@@ -335,7 +335,7 @@ test_update_approval_and_failure_gate_writes() {
   real_node_stub
   seed_global_update_installation
   before=$(tree_hash "$HOME")
-  printf 'n\n' | "$ROOT/setup.sh" --skip-project --update >"$TMP/out" 2>&1
+  printf '\n\n\n\nn\n' | "$ROOT/setup.sh" --skip-project --update >"$TMP/out" 2>&1
   assert_eq "$(tree_hash "$HOME")" "$before"
   assert_calls_empty
 
@@ -499,7 +499,7 @@ test_epiq_approval_gates_config_and_adapter() {
   new_case
   stub_commands
   real_node_stub
-  printf 'n\n' | "$ROOT/setup.sh" --project "$TMP/project" --skill-scope project \
+  printf '\n\n\n\nn\n' | "$ROOT/setup.sh" --project "$TMP/project" --skill-scope project \
     --instruction-file AGENTS.md --tracker epiq --domain-layout single \
     >/dev/null 2>&1
   assert_calls_empty
@@ -1181,6 +1181,66 @@ test_overview_reports_models() {
   assert_contains "$TMP/out" '/subagents'
 }
 
+test_setup_model_defaults_and_interactive_choices() {
+  new_case
+  stub_commands
+  real_node_stub
+  if ! printf '\n\n\n\ny\n' | "$ROOT/setup.sh" --skip-project --skill-scope global >"$TMP/out" 2>&1; then
+    printf '%s\n' "$(<"$TMP/out")" >&2
+    fail "interactive setup with default model choices failed"
+  fi
+  "$NODE" -e '
+    const s = require(process.argv[1]);
+    const o = s.subagents.agentOverrides;
+    if (o.worker?.model !== "zai/glm-5.3" || o.worker?.thinking !== "high")
+      throw new Error("worker defaults not saved: " + JSON.stringify(o.worker));
+    if (o.reviewer?.model !== "openai-codex/gpt-6.1-sol" || o.reviewer?.thinking !== "high")
+      throw new Error("reviewer defaults not saved: " + JSON.stringify(o.reviewer));
+  ' "$HOME/.pi/agent/settings.json" || fail "interactive defaults were not saved"
+
+  new_case
+  stub_commands
+  real_node_stub
+  printf 'openai/gpt-5\nmedium\nanthropic/claude-opus-4\nxhigh\ny\n' |
+    "$ROOT/setup.sh" --skip-project --skill-scope global >"$TMP/out" 2>&1
+  "$NODE" -e '
+    const s = require(process.argv[1]);
+    const o = s.subagents.agentOverrides;
+    if (o.worker?.model !== "openai/gpt-5" || o.worker?.thinking !== "medium")
+      throw new Error("worker choices not saved: " + JSON.stringify(o.worker));
+    if (o.reviewer?.model !== "anthropic/claude-opus-4" || o.reviewer?.thinking !== "xhigh")
+      throw new Error("reviewer choices not saved: " + JSON.stringify(o.reviewer));
+  ' "$HOME/.pi/agent/settings.json" || fail "interactive model overrides were not saved"
+
+  new_case
+  stub_commands
+  real_node_stub
+  seed_global_subagent_settings
+  cp "$HOME/.pi/agent/settings.json" "$TMP/settings-before"
+  printf '\n\n\n\nn\n' | "$ROOT/setup.sh" --skip-project --skill-scope global >"$TMP/out" 2>&1
+  cmp -s "$TMP/settings-before" "$HOME/.pi/agent/settings.json" || fail "decline changed current model settings"
+  assert_contains "$TMP/out" 'Aborted; nothing was installed or written.'
+  assert_calls_empty
+
+  new_case
+  stub_commands
+  real_node_stub
+  mkdir -p "$TMP/project/.pi"
+  printf '{"theme":"dark","subagents":{"agentOverrides":{"worker":{"tools":"inherit","extra":7}}}}\n' >"$TMP/project/.pi/settings.json"
+  "$ROOT/setup.sh" --project "$TMP/project" --skill-scope project --yes \
+    --instruction-file AGENTS.md --tracker local --domain-layout single \
+    --worker-model openai/gpt-5 --reviewer-model inherit \
+    </dev/null >"$TMP/out" 2>&1
+  "$NODE" -e '
+    const s = require(process.argv[1]);
+    const o = s.subagents.agentOverrides;
+    if (s.theme !== "dark" || o.worker?.model !== "openai/gpt-5" || o.worker?.thinking !== "high" || o.worker?.tools !== "inherit" || o.worker?.extra !== 7)
+      throw new Error("worker settings not preserved: " + JSON.stringify(s));
+    if (o.reviewer?.model !== "openai-codex/gpt-6.1-sol" || o.reviewer?.thinking !== "high")
+      throw new Error("reviewer defaults not materialized: " + JSON.stringify(o.reviewer));
+  ' "$TMP/project/.pi/settings.json" || fail "project defaults or unrelated settings were not preserved"
+}
+
 test_global_model_choices_update_only_selected_fields() {
   new_case
   stub_commands
@@ -1217,7 +1277,7 @@ EOF
   assert_eq "$(mode_of "$HOME/.pi/agent/settings.json")" 640
   assert_contains "$TMP/out" 'Subagent settings: updated'
   assert_contains "$TMP/out" 'worker: openai/gpt-5'
-  assert_contains "$TMP/out" 'reviewer: inherits parent model (thinking: off)'
+  assert_contains "$TMP/out" 'reviewer: openai-codex/gpt-6.1-sol (thinking: off)'
   assert_contains "$TMP/out" 'resulting subagents.agentOverrides'
   assert_contains "$TMP/out" '"tools": "inherit"'
 }
@@ -1243,10 +1303,10 @@ EOF
     const r = s.subagents.agentOverrides.reviewer;
     if (w.model !== "anthropic/claude-sonnet-4" || w.thinking !== "high" || w.tools !== "inherit")
       throw new Error("worker merge wrong: " + JSON.stringify(w));
-    if (!r || "model" in r || r.thinking !== "high")
-      throw new Error("reviewer must inherit only its model: " + JSON.stringify(r));
+    if (!r || r.model !== "kimi-coding/k3" || r.thinking !== "high")
+      throw new Error("reviewer must retain the effective global pair: " + JSON.stringify(r));
   ' "$TMP/project/.pi/settings.json" || fail "explicit project model update wrong"
-  assert_contains "$TMP/out" 'reviewer: inherits parent model'
+  assert_contains "$TMP/out" 'reviewer: kimi-coding/k3'
 }
 
 test_global_model_choice_reports_project_shadow() {
@@ -1288,7 +1348,7 @@ test_model_choice_dry_run_and_decline_write_nothing() {
   assert_contains "$TMP/out" 'settings write: yes'
   assert_calls_empty
 
-  printf 'n\n' | "$ROOT/setup.sh" --skip-project --worker-model openai/gpt-5 \
+  printf '\n\n\nn\n' | "$ROOT/setup.sh" --skip-project --worker-model openai/gpt-5 \
     >"$TMP/decline-out" 2>&1
   cmp -s "$TMP/settings-before" "$HOME/.pi/agent/settings.json" || fail "decline changed Pi settings"
   assert_contains "$TMP/decline-out" 'Aborted; nothing was installed or written.'

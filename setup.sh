@@ -33,7 +33,15 @@ WORKER_MODEL_CHOICE=keep
 REVIEWER_MODEL_CHOICE=keep
 WORKER_THINKING_CHOICE=keep
 REVIEWER_THINKING_CHOICE=keep
+WORKER_MODEL_EXPLICIT=false
+REVIEWER_MODEL_EXPLICIT=false
+WORKER_THINKING_EXPLICIT=false
+REVIEWER_THINKING_EXPLICIT=false
 MODEL_FLAGS_EXPLICIT=false
+DEFAULT_WORKER_MODEL=zai/glm-5.3
+DEFAULT_REVIEWER_MODEL=openai-codex/gpt-6.1-sol
+DEFAULT_WORKER_THINKING=high
+DEFAULT_REVIEWER_THINKING=high
 
 INSTRUCTION_FILE=
 INSTRUCTION_STATUS=
@@ -128,8 +136,11 @@ Modes:
   --yes      noninteractive approval AFTER validation and preview; skips only the
              final confirmation question, never validation
 
-Subagent model choices default to keep. Existing worker/reviewer override fields
-are never changed unless a model or thinking flag explicitly requests it.
+Interactive setup asks for worker/reviewer models and thinking. It shows the
+current effective value when configured; otherwise it offers worker
+zai/glm-5.3 and reviewer openai-codex/gpt-6.1-sol, both with high thinking.
+--yes and --dry-run do not prompt for missing model flags. Existing override
+fields stay unchanged unless a choice explicitly requests a model update.
 
 Nothing is installed and no project file is written before approval. Declining
 or closing input aborts with zero side effects. Symlinked instruction files,
@@ -223,25 +234,28 @@ parse_args() {
     --worker-model)
       [ $# -ge 2 ] || bad_usage "--worker-model requires a value"
       WORKER_MODEL_CHOICE=${2-}
+      WORKER_MODEL_EXPLICIT=true
       MODEL_FLAGS_EXPLICIT=true
       shift 2
       ;;
     --reviewer-model)
       [ $# -ge 2 ] || bad_usage "--reviewer-model requires a value"
       REVIEWER_MODEL_CHOICE=${2-}
+      REVIEWER_MODEL_EXPLICIT=true
       MODEL_FLAGS_EXPLICIT=true
       shift 2
       ;;
     --worker-thinking)
       [ $# -ge 2 ] || bad_usage "--worker-thinking requires a value"
       WORKER_THINKING_CHOICE=${2-}
+      WORKER_THINKING_EXPLICIT=true
       MODEL_FLAGS_EXPLICIT=true
       shift 2
       ;;
     --reviewer-thinking)
       [ $# -ge 2 ] || bad_usage "--reviewer-thinking requires a value"
       REVIEWER_THINKING_CHOICE=${2-}
-      MODEL_FLAGS_EXPLICIT=true
+      REVIEWER_THINKING_EXPLICIT=true
       shift 2
       ;;
     -h | --help)
@@ -407,6 +421,49 @@ ask_line() {
     ans="$default"
   fi
   echo "$ans"
+}
+
+ask_subagent_model_field() {
+  local role="$1" field="$2" current="$3" source="$4" explicit="$5" default choice prompt
+  "$explicit" && return 0
+  if [ "$source" = "spec default" ]; then
+    default="$current"
+    prompt="$role $field (default: $current): "
+  else
+    default=keep
+    prompt="$role $field (current: $current; Enter keeps): "
+  fi
+  printf '%s' "$prompt" >&2
+  choice=
+  read -r choice || die "standard input closed while asking: $prompt; aborting with no changes"
+  [ -n "$choice" ] || choice="$default"
+  case "$role:$field" in
+    worker:model) WORKER_MODEL_CHOICE=$choice ;;
+    reviewer:model) REVIEWER_MODEL_CHOICE=$choice ;;
+    worker:thinking) WORKER_THINKING_CHOICE=$choice ;;
+    reviewer:thinking) REVIEWER_THINKING_CHOICE=$choice ;;
+  esac
+}
+
+ask_subagent_model_choices() {
+  "$ASSUME_YES" && return 0
+  "$INSPECT" && return 0
+  "$DRY_RUN_MODE" && return 0
+  command -v node >/dev/null 2>&1 || return 0
+  local info name model thinking model_source thinking_source
+  info=$(resolve_agent_models)
+  while IFS=$(printf '\t') read -r name model thinking model_source thinking_source <&3; do
+    case "$name" in
+      worker)
+        ask_subagent_model_field worker model "$model" "$model_source" "$WORKER_MODEL_EXPLICIT"
+        ask_subagent_model_field worker thinking "$thinking" "$thinking_source" "$WORKER_THINKING_EXPLICIT"
+        ;;
+      reviewer)
+        ask_subagent_model_field reviewer model "$model" "$model_source" "$REVIEWER_MODEL_EXPLICIT"
+        ask_subagent_model_field reviewer thinking "$thinking" "$thinking_source" "$REVIEWER_THINKING_EXPLICIT"
+        ;;
+    esac
+  done 3<<<"$info"
 }
 
 has_github_origin() {
@@ -1015,6 +1072,7 @@ resolve_choices() {
     SCOPE_STATUS=answered
   fi
 
+  ask_subagent_model_choices
   resolve_subagent_settings
   resolve_mcp_config
   resolve_update_plan
@@ -1355,10 +1413,13 @@ subagent_model_settings() {
   [ -n "$PROJECT" ] && project_settings="$PROJECT/.pi/settings.json"
   node - "$action" "$HOME/.pi/agent/settings.json" "$SUBAGENT_SETTINGS_PATH" "$project_settings" "$SKILL_SCOPE" \
     "$WORKER_MODEL_CHOICE" "$WORKER_THINKING_CHOICE" \
-    "$REVIEWER_MODEL_CHOICE" "$REVIEWER_THINKING_CHOICE" <<'EOF'
+    "$REVIEWER_MODEL_CHOICE" "$REVIEWER_THINKING_CHOICE" \
+    "$DEFAULT_WORKER_MODEL" "$DEFAULT_WORKER_THINKING" \
+    "$DEFAULT_REVIEWER_MODEL" "$DEFAULT_REVIEWER_THINKING" <<'EOF'
 const fs = require('fs');
 const path = require('path');
-const [action, globalPath, targetPath, projectPath, scope, workerModel, workerThinking, reviewerModel, reviewerThinking] = process.argv.slice(2);
+const [action, globalPath, targetPath, projectPath, scope, workerModel, workerThinking, reviewerModel, reviewerThinking,
+  defaultWorkerModel, defaultWorkerThinking, defaultReviewerModel, defaultReviewerThinking] = process.argv.slice(2);
 const read = file => fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
 const readOptional = file => { try { return file ? read(file) : {}; } catch { return {}; } };
 const globalSettings = read(globalPath);
@@ -1408,16 +1469,34 @@ for (const [name, fields] of Object.entries(choices)) {
   }
 }
 
+if (scope === 'Project') {
+  const projects = target.subagents?.agentOverrides;
+  const globals = globalSettings.subagents?.agentOverrides;
+  for (const [name, model, thinking] of [
+    ['worker', defaultWorkerModel, defaultWorkerThinking],
+    ['reviewer', defaultReviewerModel, defaultReviewerThinking],
+  ]) {
+    const override = projects?.[name];
+    if (!override || typeof override !== 'object') continue;
+    const global = globals?.[name];
+    override.model ??= global?.model ?? model;
+    override.thinking ??= global?.thinking ?? thinking;
+  }
+}
+
 const effective = name => {
   const projectSettings = scope === 'Project' ? target : readOptional(projectPath);
   const projectOverride = projectSettings.subagents?.agentOverrides?.[name];
   const globalOverride = (targetPath === globalPath ? target : globalSettings).subagents?.agentOverrides?.[name];
-  const override = projectOverride ?? globalOverride;
-  return {
-    model: override?.model ?? 'inherits parent model',
-    thinking: override?.thinking ?? 'default',
-    source: projectOverride ? 'project .pi/settings.json' : globalOverride ? '~/.pi/agent/settings.json' : 'builtin default',
+  const defaults = name === 'worker'
+    ? { model: defaultWorkerModel, thinking: defaultWorkerThinking }
+    : { model: defaultReviewerModel, thinking: defaultReviewerThinking };
+  const value = field => {
+    if (projectOverride?.[field] != null) return { value: projectOverride[field], source: 'project .pi/settings.json' };
+    if (globalOverride?.[field] != null) return { value: globalOverride[field], source: '~/.pi/agent/settings.json' };
+    return { value: defaults[field], source: 'spec default' };
   };
+  return { model: value('model'), thinking: value('thinking') };
 };
 const changed = JSON.stringify(target) !== before;
 
@@ -1425,7 +1504,7 @@ if (action === 'preview') {
   console.log(`Subagent settings target: ${targetPath}`);
   for (const name of ['worker', 'reviewer']) {
     const value = effective(name);
-    console.log(`  ${name}: ${value.model} (thinking: ${value.thinking}) — ${value.source}`);
+    console.log(`  ${name}: ${value.model.value} (thinking: ${value.thinking.value}) — model: ${value.model.source}; thinking: ${value.thinking.source}`);
   }
   console.log(`  settings write: ${changed ? 'yes' : 'no'}`);
   console.log('  resulting subagents.agentOverrides:');
@@ -1494,22 +1573,28 @@ resolve_agent_models() {
   # prints NAME<TAB>MODEL<TAB>THINKING<TAB>SOURCE per line for worker and reviewer
   local project_settings=""
   [ -n "$PROJECT" ] && project_settings="$PROJECT/.pi/settings.json"
-  node - "$project_settings" "$HOME/.pi/agent/settings.json" <<'EOF'
+  node - "$project_settings" "$HOME/.pi/agent/settings.json" \
+    "$DEFAULT_WORKER_MODEL" "$DEFAULT_WORKER_THINKING" \
+    "$DEFAULT_REVIEWER_MODEL" "$DEFAULT_REVIEWER_THINKING" <<'EOF'
 const fs = require('fs');
-const [projectPath, userPath] = process.argv.slice(2);
+const [projectPath, userPath, defaultWorkerModel, defaultWorkerThinking, defaultReviewerModel, defaultReviewerThinking] = process.argv.slice(2);
 const read = p => { try { return p ? JSON.parse(fs.readFileSync(p, 'utf8')) : {}; } catch { return {}; } };
 const project = read(projectPath);
 const user = read(userPath);
-for (const name of ['worker', 'reviewer']) {
+for (const [name, defaults] of [
+  ['worker', { model: defaultWorkerModel, thinking: defaultWorkerThinking }],
+  ['reviewer', { model: defaultReviewerModel, thinking: defaultReviewerThinking }],
+]) {
   const po = project.subagents?.agentOverrides?.[name];
   const uo = user.subagents?.agentOverrides?.[name];
-  const active = po ?? uo;
-  console.log([
-    name,
-    active?.model ?? 'inherits parent model',
-    active?.thinking ?? 'default',
-    po ? 'project .pi/settings.json' : uo ? '~/.pi/agent/settings.json' : 'builtin default',
-  ].join('\t'));
+  const field = key => po?.[key] != null
+    ? { value: po[key], source: 'project .pi/settings.json' }
+    : uo?.[key] != null
+      ? { value: uo[key], source: '~/.pi/agent/settings.json' }
+      : { value: defaults[key], source: 'spec default' };
+  const model = field('model');
+  const thinking = field('thinking');
+  console.log([name, model.value, thinking.value, model.source, thinking.source].join('\t'));
 }
 EOF
 }
@@ -1517,8 +1602,8 @@ EOF
 print_setup_overview() {
   echo
   echo "Subagent models in effect:"
-  resolve_agent_models | while IFS=$(printf '\t') read -r name model thinking source; do
-    printf '  %s: %s (thinking: %s) — %s\n' "$name" "$model" "$thinking" "$source"
+  resolve_agent_models | while IFS=$(printf '\t') read -r name model thinking model_source thinking_source; do
+    printf '  %s: %s (thinking: %s) — model: %s; thinking: %s\n' "$name" "$model" "$thinking" "$model_source" "$thinking_source"
   done
   echo "Change them in the project .pi/settings.json, globally in ~/.pi/agent/settings.json (subagents.agentOverrides.<name>), or with /subagents inside pi."
 }
@@ -2428,8 +2513,8 @@ inspect_report() {
   echo "    reviewer: model=$REVIEWER_MODEL_CHOICE thinking=$REVIEWER_THINKING_CHOICE"
   echo "    settings target: $SUBAGENT_SETTINGS_PATH"
   if command -v node >/dev/null 2>&1; then
-    resolve_agent_models | while IFS=$(printf '\t') read -r name model thinking source; do
-      printf '    current %s: %s (thinking: %s) — %s\n' "$name" "$model" "$thinking" "$source"
+    resolve_agent_models | while IFS=$(printf '\t') read -r name model thinking model_source thinking_source; do
+      printf '    current %s: %s (thinking: %s) — model: %s; thinking: %s\n' "$name" "$model" "$thinking" "$model_source" "$thinking_source"
     done
   else
     echo "    current values: unavailable until node is installed"
