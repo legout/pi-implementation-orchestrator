@@ -24,3 +24,7 @@ _Avoid_: Design study (when referring to committed behavior).
 **Independent reviewer**: A separate role assessing the exact implementation evidence without becoming its author or final acceptance authority.
 
 **Handoff**: The bounded source references, authority, prerequisites, and evidence passed between planning or execution roles.
+
+**Characterization test**: A test pinning currently observed behavior before a change, derived from captured real behavior rather than intended design; it protects refactors, not the correctness of new intent.
+
+**Independent oracle**: A source of expected values — approved spec, acceptance criteria, upstream contract, or real input/output — that does not come from reading the implementation under test.
