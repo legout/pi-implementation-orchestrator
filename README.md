@@ -288,7 +288,9 @@ node -e 'const p=require("./package.json"); \
 git diff --check
 ```
 
-`tests/setup_test.sh` runs every case in an independent shell process so a failed assertion always fails the suite; `tests/setup_runner_test.sh` mutation-probes that runner (a copy of `setup.sh` that omits the generated docs during interactive setup must fail the copied suite) and never invokes a real installer. Both suites run on every push and pull request via GitHub Actions. Generated-contract assertions pin delivery of the guardrails; sibling skill tests pin inline reviewer prompts and full-patch/delta-recheck recovery. The skill's `evals/fixtures/review-guardrails.md` covers trivial changes, pseudo-finding disposition, real bugs/convention violations, and a bounded recheck. Text assertions do not prove model behavior; report live scenario runs separately.
+During iteration, run affected cases directly, e.g. `bash tests/setup_test.sh --case test_initializes_agents_docs`; run both suites before completion.
+
+`tests/setup_test.sh` runs every case in an independent shell process so a failed assertion always fails the suite; `tests/setup_runner_test.sh` mutation-probes that runner using only the interactive-docs case and synthetic failure/success cases, not repeated full setup-suite runs. A copy of `setup.sh` that omits the generated docs during interactive setup must fail the copied suite; an early failed assertion and a failed case followed by a passing case must also fail. The runner itself stays unchanged and no real installer runs. Both suites run on every push and pull request via GitHub Actions. Generated-contract assertions pin delivery of the guardrails; sibling skill tests pin inline reviewer prompts and full-patch/delta-recheck recovery. The skill's `evals/fixtures/review-guardrails.md` covers trivial changes, pseudo-finding disposition, real bugs/convention violations, and a bounded recheck. Text assertions do not prove model behavior; report live scenario runs separately.
 
 ## Attribution
 

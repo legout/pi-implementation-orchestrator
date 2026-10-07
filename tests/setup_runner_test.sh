@@ -9,6 +9,8 @@
 # during interactive setup must make the copied suite fail, and (2) verifying
 # an early failing assertion followed by a passing command still fails a case.
 #
+# Copied suites retain only the interactive-docs case plus synthetic probes;
+# the real runner stays unchanged. The full setup suite runs separately in CI.
 # Everything runs against copies in a temporary directory with an isolated
 # HOME/TMPDIR and defensive outer pi/npx stubs, so no real installer ever runs.
 set -euo pipefail
@@ -50,7 +52,20 @@ copy_suite() {
   local dest="$1"
   mkdir -p "$dest/tests" "$dest/prompts" "$dest/docs"
   cp "$ROOT/setup.sh" "$dest/setup.sh"
-  cp "$ROOT/tests/setup_test.sh" "$dest/tests/setup_test.sh"
+  # Unregister unrelated cases before main, without changing discovery,
+  # subprocess isolation, or failure reporting in the runner under test.
+  awk '
+    /^test_[[:alnum:]_]+\(\) \{/ {
+      name = $1
+      sub(/\(\)$/, "", name)
+      if (name != "test_initializes_agents_docs")
+        prune = prune "unset -f " name "\n"
+    }
+    /^main "\$@"$/ { printf "%s", prune; inserted++ }
+    { print }
+    END { exit (inserted == 1 ? 0 : 1) }
+  ' "$ROOT/tests/setup_test.sh" >"$dest/tests/setup_test.sh" ||
+    fail "case-selection insertion point not found in setup_test.sh"
   cp "$ROOT/package.json" "$dest/package.json"
   cp "$ROOT/README.md" "$dest/README.md"
   cp "$ROOT/prompts/"*.md "$dest/prompts/"
@@ -93,7 +108,7 @@ test_syntax_checks_are_per_file() {
 }
 
 test_control_copy_passes() {
-  # Proves the copied inputs are complete and the environment is sane; a
+  # Proves the interactive-docs case passes in the copied environment; a
   # failing mutation probe is only meaningful against a passing control.
   new_run
   copy_suite "$TMP/suite"
@@ -133,8 +148,8 @@ $SUITE_OUT"
 }
 
 test_early_failure_fails_case_despite_later_success() {
-  # A case whose first assertion fails but whose later commands pass must
-  # still exit nonzero — both as a single case and in the full run.
+  # An early assertion failure must fail both the case and the suite, even
+  # when the failing assertion is followed by a passing command/case.
   new_run
   copy_suite "$TMP/suite"
   probe_fn="$TMP/probe-fn.sh"
@@ -143,6 +158,10 @@ test_zzz_runner_probe_early_failure() {
   new_case
   test -f "/nonexistent/pi-orchestrator-probe/missing-file"
   echo "probe: this later command passes"
+}
+
+test_zzzz_runner_probe_later_success() {
+  :
 }
 
 EOF
@@ -165,6 +184,9 @@ EOF
     fail "full run passed despite the inserted failing case"
   printf '%s\n' "$SUITE_OUT" | grep -q '^FAIL: test_zzz_runner_probe_early_failure$' ||
     fail "full run did not report the inserted failing case:
+$SUITE_OUT"
+  printf '%s\n' "$SUITE_OUT" | grep -q '^ok: test_zzzz_runner_probe_later_success$' ||
+    fail "suite did not continue to the passing case after the failure:
 $SUITE_OUT"
   assert_outer_calls_empty
 }
