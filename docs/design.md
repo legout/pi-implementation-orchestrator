@@ -2,7 +2,7 @@
 
 ## Goal
 
-Publish a safe Pi installer and setup prompt for implementation-orchestration and planning skills maintained in `legout/skills`, using the builtin pi-subagents `worker`/`reviewer` pair with risk-based validation and proportional review, optional persistent intercom peers, and interactive project setup.
+Publish a safe Pi installer and setup prompt for the planning and Pi-only implementation skills maintained in `legout/skills`. This package owns installation, project scaffolding, native role settings, and thin lifecycle shortcuts; the installed skills own execution.
 
 ## Repository
 
@@ -22,14 +22,13 @@ Native package installation is passive: Pi loads the declared `prompts/` resourc
 planning skills
   → ADRs, specifications, tickets, and plans
   → orchestrate-implementation
-  → builtin `worker` in managed worktrees
-  → focused validation
-  → proportional parent/reviewer checks
-  → orchestrator-owned integration
-  → separate publication authority
+  → Pi children through the selected host
+  → focused validation and parent/reviewer checks
+  → reviewed isolated candidate
+  → separately authorized target integration and publication
 ```
 
-`pi-subagents` owns child lifecycle, worktrees, mission state, artifacts, review, and recovery as the default worker backend. `pi-intercom` serves explicitly named persistent read-only advisors, visible cross-project peers, and `herdr-pane` lanes when a run selects visible pane workers; Paseo lanes are an optional named backend managed by the user's own Paseo daemon, not by this installer. Every new worker/fix and parent review/candidate worktree uses `<repo-parent>/worktrees/<repo-name>/`; the orchestrator verifies the selected allocator and blocks rather than falling back when it cannot honor that root. Worker and reviewer model/thinking resolve per field as run/lane override → project → global → defaults (`zai/glm-5.3`/`high` and `openai-codex/gpt-6.1-sol`/`high`) and are passed exactly to the selected backend or blocked.
+Setup installs `pi-subagents` and `pi-intercom`; it does not install or configure Herdr, Paseo, or T3. The installed orchestration skill selects the Pi host: explicit/configured choices win, otherwise the verified current host. Native Pi children, fresh Herdr panes, Paseo's Pi provider, and T3's Pi driver are supported transports; T3 children remain read-only without supported isolated mutation binding. Intercom is optional messaging, not placement or lifecycle authority. The shared worktree-root and exact model/thinking policy remains unchanged and is enforced by the skill's selected adapter; setup preserves its existing per-field model-setting behavior.
 
 ## Repository Layout
 
@@ -101,7 +100,7 @@ Install exactly this set from `legout/skills`; no other upstream skill repositor
 - `make-release` — release publication.
 - `planning-contract` — shared planning artifact and handoff contract (classification defaults, capture checkpoint, approval/readiness rules, missing-contract refusal) consumed by the planning skills above; installed explicitly alongside them because the skills CLI does not resolve dependencies.
 
-The builtin `worker` gets validation discipline through `orchestrate-implementation`; when the selected review policy requires it, the orchestrator supplies a fresh read-only builtin `reviewer`. Setup uses the profiles shipped by `pi-subagents` and never creates or replaces their definitions. Optional setup choices update only selected `model`/`thinking` fields while preserving tool configuration, other agents, and unknown keys. Confirm selected native profiles are executable before dispatch and record them in the run manifest; explicitly selected Herdr/Paseo lanes use their backend-specific preflight and external runtime guidance. Additional `legout/skills` entries (`capture-project-vision`, `doc-coauthoring`, `simplify-code`, `review-codebase-architecture`) are available but not installed by default.
+Setup uses native `worker`/`reviewer` profiles shipped by `pi-subagents` and never creates or replaces agent definitions. Its model/thinking choices preserve unrelated settings. At runtime the skill verifies that selected profiles actually run Pi and that the host supports the role, shared-root placement, and exact resolved pair; other agent runtimes are not fallbacks. Additional `legout/skills` entries (`capture-project-vision`, `doc-coauthoring`, `simplify-code`, `review-codebase-architecture`) remain available but are not installed by default.
 
 ## Upstream Installation
 
@@ -154,10 +153,10 @@ If one of `CLAUDE.md` or `AGENTS.md` already exists, update that file. If both e
 
 Write or update one marked workflow block that documents:
 
-- risk-based validation-unit obligations (`new-test`, `existing-check`, `no-new-test`);
-- default builtin `worker`/`reviewer` routing, with executable-profile preflight and explicit `herdr-pane`/`paseo` run or lane overrides;
-- adaptive orchestrator-owned review with inline finding/security/test gates, parent disposition before repair, one fix pass plus one delta recheck, and a task/result reflection checkpoint;
-- routing and authority rules (which skill handles which decision — including loading the shared `planning-contract` skill and the `project/agents/artifacts.md` mapping — `supervised` default with explicit integration/publication gates, one writer per worktree, evidence discipline, merge/release authority);
+- delegation of validation, review timing, committed-result handoffs, and patch-only recovery to the installed `orchestrate-implementation` skill;
+- Pi-only host selection and executable-role preflight, including read-only T3 placement and optional intercom messaging;
+- inline finding/security/test gates, parent disposition before repair, one fix pass plus one delta recheck, and a task/result reflection checkpoint;
+- routing and authority rules (skill ownership, the shared `planning-contract` and artifact-map references, `supervised` preparation/review of an isolated candidate before the target-integration pause, explicit owner restrictions, one writer per worktree, and separate integration/publication authority);
 - a layout-aware documentation map — single-context references canonical root `CONTEXT.md`; multi-context references per-context glossaries and an optional `CONTEXT-MAP.md` and never declares a root `CONTEXT.md` canonical;
 - scoped authority (glossaries own terminology; ADRs own accepted architectural constraints; specifications own behavior; plans/tickets own execution decomposition; no scope silently overrides another); and
 - stop-on-conflict behavior.
@@ -174,28 +173,17 @@ When Epiq is selected, also merge its lazy stdio server into `.mcp.json` for pro
 
 Re-running setup updates the one managed block and regenerates the three managed docs idempotently (byte-identical for unchanged choices). Ambiguous or malformed managed blocks stop safely; custom content in the managed docs requires an explicit replace decision and is never silently overwritten.
 
-## Test obligations and review policy
+## Execution contract ownership
 
-Validation evidence is mandatory; a new test is not. During preflight each validation unit receives exactly one obligation, and related tasks may share a validation unit:
+The installed `orchestrate-implementation` skill owns intake readiness, host selection, decomposition, validation obligations, review timing, durable handoffs, candidate assembly, interruption, and cleanup. Setup's generated block routes to that skill rather than copying its policy menus, command recipes, or lifecycle state.
 
-- `new-test`: changed behavior lacks meaningful existing coverage and a named reachable failure would otherwise be unprotected. Add one focused test at the cheapest stable public seam. Expected values must be derived independently of the implementation under test — from the approved spec, acceptance criteria, or another oracle (an upstream contract, a real input/output pair, captured behavior) — never from reading the code under test. Ordering is the worker's choice, except: a bug fix requires a reproducing test that demonstrably fails before the fix lands, and a behavior-affecting refactor pins current behavior with a characterization test before mutation. Add further tests only for distinct material failure modes.
-- `existing-check`: an existing focused check already exercises the affected behavior. Run and report that check without adding redundant tests.
-- `no-new-test`: a new test would prove little, including documentation, formatting, comments, static metadata, generated artifacts, mechanical changes, or behavior-neutral refactoring. Run the smallest meaningful parse, build, smoke check, or diff inspection.
+The generated contract defaults to `supervised`: implementation, validation, and review reach an isolated candidate before pausing for target integration. Explicit owner restrictions override that default. Target integration and publication retain separate authority; setup never performs either.
 
-The review policy is chosen per run and defaults to `adaptive`:
+All child roles use Pi. Native profiles must be executable Pi roles; Herdr, Paseo, and T3 use the installed adapter's placement and capability checks. T3 is read-only while isolated child binding is unsupported. Shared-root placement and exact per-field model/thinking resolution remain binding; unsupported hosts, allocators, or pairs block rather than silently falling back.
 
-- `adaptive` (default): parent diff inspection for low-risk work, one candidate review for normal-risk work, and immediate plus candidate review for high-risk or dependency-defining work.
-- `strict`: immediate task review plus final review.
-- `final-only`: one independent candidate review, with no task or wave reviews.
-- `parent-only`: parent diff inspection plus focused checks; use for low-risk changes only.
+Committed results retained under frozen refs are the ordinary handoff, even when a managed worker checkout disappears. Patch reconstruction is only a fallback for complete patch-only handoffs. Fixes normally descend from the previous result and receive one delta recheck; neither candidate assembly nor recovery resets that budget. The recipe and identity checks stay in the skill, not setup.
 
-Immediate-review triggers: public API/schema/shared contract; security/auth/permissions/secrets; money/data-loss/migration; concurrency/distributed behavior; broad cross-cutting diff; weak or missing checks; implementer uncertainty/scope expansion; integration conflict; a task whose contract will be consumed before the next wave review.
-
-At a wave boundary, independently review only high-risk lanes and dependency-defining contracts needed by the next wave. Defer normal-risk review until the candidate is assembled; low-risk lanes receive parent inspection. Verify the exact candidate range after accepted lanes are assembled, using prior evidence only after checking correspondence. Review unreviewed code and integration effects, never reopen settled findings. One fix pass and one delta recheck is the limit, not a renewable default; unresolved blockers go to the human, never round three.
-
-Every fresh reviewer dispatch carries the complete contract inline: approved criteria, named written conventions, actual callers/inputs/environment, five finding gates (named requirement/rule, change-caused or worsened, reachable, material, proportionate), realistic security-boundary gating, named test scenarios, and a finite `pass`/`fix-first` verdict. Untouched security boundaries get `security: n/a`; missing security facts remain `unverified`. The parent rejects failed gates, authorizes small in-scope fixes, or hands large/out-of-scope work to the human before any repair. Written conventions still bind, taste and coverage targets do not. Existing reports hold the task/result comparison (`accept / fix / hand back / ask`); no extra ledgers, lifecycles, or sign-offs.
-
-Review evidence is branch-scoped, not parent-`HEAD`-scoped, and never assumes implementer-worktree survival: verdicts bind to the exact reviewed branch range; when an implementation worktree/branch disappears, the durable handoff patch is replayed at the pinned lane base inside a parent-owned review worktree to reconstruct and review the exact tree; fixes restart from that base with the prior patch applied, preserving the prior materialized review ref/SHA. Full replacement patches reconstruct from the pinned base, but the one recheck compares the two materialized endpoints directly and only checks the fix and affected behavior; transport never resets the correction budget. Accepted lanes are assembled into an explicitly registered candidate branch handed to `merge-worktree`. This lifecycle contract is owned by `orchestrate-implementation` in the current `legout/skills` catalog.
+Keep review ground rules inline in the generated block so they reach the parent: findings need a named requirement/rule, change-caused or worsened defect, real reachability, material impact, and a proportionate response. Security/test requests pass the same evidence gates. The parent dispositions findings and owns acceptance; every fresh reviewer receives the full filled contract from the skill. No extra ledgers or sign-off artifacts are generated.
 
 ## Safety
 
@@ -225,7 +213,7 @@ Verify:
 6. no other upstream skill repository (`mattpocock/skills`, `obra/superpowers`) appears in install commands;
 7. explicit project-choice flags bypass prompts and validate values;
 8. dry-run performs no package or project writes;
-9. interactive choices generate the intended managed block and docs;
+9. interactive choices generate the intended managed block and docs, with Pi-only host selection, skill-owned execution details, inline reviewer gates, and candidate review before the target-integration pause;
 10. reruns are idempotent and produce byte-identical blocks across direct and flag-driven setup;
 11. ambiguous or malformed managed blocks fail safely before any install;
 12. existing instructions outside the managed block remain unchanged (bytes and file modes);
@@ -256,7 +244,7 @@ The root README is short but comprehensive. It includes:
 - ticket/plan input behavior;
 - project documentation scope and precedence;
 - execution modes;
-- test obligations and adaptive review boundaries;
+- execution-contract ownership and review/authority boundaries;
 - Herdr visibility options;
 - dry-run, updates, uninstall, and troubleshooting;
 - limitations; and

@@ -383,6 +383,11 @@ EOF
 { "packages": ["npm:pi-subagents", "npm:pi-intercom"] }
 EOF
   printf 'existing prompt\n' >"$TMP/project/.pi/prompts/setup-implementation-orchestrator.md"
+  # An update must replace the old conflicting contract, not require reinstall.
+  printf 'owner prefix\n%s\ncandidate assembly, integration, and publication retain explicit approval gates\n%s\nowner suffix' \
+    "$START_MARKER" "$END_MARKER" >"$TMP/project/AGENTS.md"
+  local settings_before
+  settings_before=$(shasum <"$TMP/project/.pi/settings.json")
   "$ROOT/setup.sh" --project "$TMP/project" --update --skill-scope project --yes \
     --instruction-file AGENTS.md --tracker local --domain-layout single \
     </dev/null >"$TMP/out" 2>&1
@@ -391,6 +396,11 @@ EOF
   assert_contains "$TEST_CALLS" 'pi update npm:pi-subagents'
   assert_not_contains "$TEST_CALLS" 'skills add'
   assert_not_contains "$TEST_CALLS" 'pi install'
+  assert_contains "$TMP/project/AGENTS.md" 'owner prefix'
+  assert_contains "$TMP/project/AGENTS.md" 'owner suffix'
+  assert_contains "$TMP/project/AGENTS.md" 'prepare and review an isolated candidate, then pause before target integration'
+  assert_not_contains "$TMP/project/AGENTS.md" 'candidate assembly, integration, and publication retain explicit approval gates'
+  assert_eq "$(shasum <"$TMP/project/.pi/settings.json")" "$settings_before"
 }
 
 test_epiq_project_scope_configures_mcp() {
@@ -603,8 +613,8 @@ test_initializes_agents_docs() {
   assert_file "$TMP/project/project/agents/domain.md"
   assert_file "$TMP/project/project/agents/artifacts.md"
   assert_contains "$TMP/project/AGENTS.md" "pi-implementation-orchestrator:start"
-  assert_contains "$TMP/project/AGENTS.md" "one focused test at the cheapest stable public seam"
-  assert_contains "$TMP/project/AGENTS.md" "orchestrator-owned"
+  assert_contains "$TMP/project/AGENTS.md" 'Follow the installed `orchestrate-implementation` skill'
+  assert_contains "$TMP/project/AGENTS.md" 'prepare and review an isolated candidate, then pause before target integration'
   assert_contains "$TMP/project/project/agents/issue-tracker.md" "Tracker: Local Markdown."
   assert_contains "$TMP/project/project/agents/domain.md" "Layout: single context."
   assert_contains "$TMP/project/project/agents/artifacts.md" "# Artifact mapping"
@@ -1016,18 +1026,17 @@ test_replacement_preserves_file_mode() {
   assert_eq "$(mode_of "$TMP/project/AGENTS.md")" "640"
 }
 
-test_adaptive_review_and_test_policy() {
-  assert_contains "$ROOT/README.md" 'Every validation unit receives exactly one test obligation'
-  assert_contains "$ROOT/README.md" 'low-risk work uses parent diff inspection'
-  assert_contains "$ROOT/README.md" 'high-risk or dependency-defining work gets immediate plus candidate review'
-  assert_not_contains "$ROOT/README.md" 'low-risk changes may be batch-reviewed'
+test_skill_execution_contract() {
+  assert_contains "$ROOT/README.md" 'Execution procedure belongs to the installed `orchestrate-implementation` skill'
+  assert_not_contains "$ROOT/README.md" '`strict`, `final-only`, and `parent-only`'
+  assert_not_contains "$ROOT/README.md" 'normalizes different plan formats with a read-only scout'
   new_case
   stub_commands
   printf '1\n1\n1\ny\n' | "$ROOT/setup.sh" --project "$TMP/project" >/dev/null 2>&1
-  assert_contains "$TMP/project/AGENTS.md" 'Every validation unit receives one test obligation: `new-test`, `existing-check`, or `no-new-test`; related tasks may share a validation unit. `new-test` means one focused test at the cheapest stable public seam with expected values derived independently of the implementation under test (spec, acceptance criteria, or another oracle); failing-test-first applies only to bug repros and behavior pinning before refactors. Prefer the cheapest stable check that satisfies the obligation — types/lint/build, then an existing focused check, then a new focused test.'
+  assert_contains "$TMP/project/AGENTS.md" 'Follow the installed `orchestrate-implementation` skill for validation obligations (`new-test`, `existing-check`, `no-new-test`), review timing, committed-result handoffs, and patch-only recovery.'
+  assert_not_contains "$TMP/project/AGENTS.md" 'Review is adaptive'
+  assert_not_contains "$TMP/project/AGENTS.md" 'types/lint/build, then'
   assert_not_contains "$TMP/project/AGENTS.md" 'focused TDD is required'
-  assert_not_contains "$TMP/project/AGENTS.md" 'one failing test first'
-  assert_contains "$TMP/project/AGENTS.md" 'Review is adaptive and orchestrator-owned: low-risk work uses parent diff inspection; normal-risk work gets one candidate review; high-risk or dependency-defining work gets immediate plus candidate review.'
   for rule in 'agreed feature, then correctness, then proven risk' \
     'named requirement or written rule' 'caused or worsened' \
     'named asset, realistic attacker' 'security: n/a' 'unverified' \
@@ -1054,13 +1063,19 @@ test_routing_authority_block() {
   assert_not_contains "$block" 'Source precedence:'
   assert_contains "$block" 'Use `shape-design` for unresolved behavior/design choices'
   assert_contains "$block" 'Default orchestrated execution to `supervised`'
-  assert_contains "$block" 'Route implementation to builtin `worker` and, when required by the selected policy, independent review to a fresh read-only builtin `reviewer`'
+  assert_contains "$block" 'prepare and review an isolated candidate, then pause before target integration'
+  assert_not_contains "$block" 'candidate assembly, integration, and publication retain explicit approval gates'
+  assert_contains "$block" 'Use Pi for every child role'
+  assert_contains "$block" 'explicit/configured host selection wins, otherwise use the verified current host'
+  assert_contains "$block" 'native `pi-subagents`, `herdr-pane`, Paseo’s Pi provider, or T3’s Pi driver'
+  assert_contains "$block" 'T3 children remain read-only without supported isolated workspace binding'
+  assert_contains "$block" 'Native Pi dispatch uses executable `worker`/read-only `reviewer` profiles'
   assert_not_contains "$block" '`implementer` agent'
   assert_not_contains "$block" '`code-reviewer`'
-  assert_contains "$block" 'record the resolved names in the run manifest'
-  assert_contains "$block" 'Use `pi-subagents` for spawned-child lifecycle'
-  assert_contains "$block" 'Explicit run/lane selections may instead use `herdr-pane` or `paseo`'
-  assert_contains "$block" 'record and preflight the selected backend'
+  assert_contains "$block" 'shared-root and exact model/thinking preflight'
+  assert_contains "$block" 'record the resolved host and roles in existing run state'
+  assert_contains "$block" 'intercom is optional messaging, not workspace placement or lifecycle authority'
+  assert_contains "$block" 'Do not silently switch hosts or runtimes'
   assert_contains "$block" 'Use `systematic-debugging` for unexpected failures'
   assert_contains "$block" 'Use `merge-worktree` for target integration'
   assert_contains "$block" 'Local integration does not authorize pushing; opening a PR does not authorize merging'
@@ -1443,7 +1458,11 @@ test_single_setup_entrypoint() {
   assert_contains "$prompt" "pi-mcp-adapter"
   assert_contains "$prompt" ".mcp.json"
   assert_contains "$prompt" "Setup does not initialize an Epiq board or project"
-  assert_contains "$prompt" "record the resolved names in the run manifest"
+  assert_contains "$prompt" 'delegates execution details to the installed `orchestrate-implementation` skill'
+  assert_contains "$prompt" 'requires Pi for every child role'
+  assert_contains "$prompt" 'T3 children remain read-only'
+  assert_contains "$prompt" 'reviewed isolated candidate before pausing for target integration'
+  assert_not_contains "$prompt" 'generated workflow defaults to builtin'
   assert_contains "$prompt" '$@'
   test ! -e "$ROOT/prompts/init-orchestrator-project.md"
   assert_not_contains "$ROOT/README.md" "prompts/init-orchestrator-project.md"
