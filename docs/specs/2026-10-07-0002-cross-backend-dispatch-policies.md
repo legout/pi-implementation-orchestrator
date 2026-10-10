@@ -1,10 +1,10 @@
 # Cross-backend worktree and model policy
 
-**Status:** Approved behavioral source, revision 1. Implementation is not authorized.
+**Status:** Approved behavioral source, revision 2. The placement amendment and its local activation are authorized; publication and migration are not.
 
 **Planning contract:** version 1. Installed provenance: local copy; exact catalog revision unknown.
 
-**Owner approval:** The user approved this written specification on 2026-10-07. Approval covers revision 1 and its shared sibling worktree root, cross-backend model resolution, and setup behavior only. No implementation, migration, or publication authority was granted.
+**Owner approval:** The user approved this written specification on 2026-10-07. Approval covers revision 1 and its shared sibling worktree root, cross-backend model resolution, and setup behavior only. No implementation, migration, or publication authority was granted by that approval. On 2026-10-10 the owner approved replacing sibling roots with the shared XDG state root, updating skill/setup instructions and tests, synchronizing the installed skill, and configuring local Pi/Paseo placement. This revision supersedes only the placement requirements; model/setup policy is unchanged. No migration, daemon restart, or publication was authorized.
 
 ## Purpose
 
@@ -12,8 +12,8 @@ Make worktree placement and worker/reviewer model selection consistent when a ru
 
 ## Scope and decisions
 
-1. Use one visible, external worktree tree per project checkout: `<repo-parent>/worktrees/<repo-name>/`. Each checkout gets its own tree; separate clones do not share worktrees.
-2. Put worker, fix, parent review/reconstruction, and candidate worktrees under that project tree. Backend-specific leaf names are allowed, but each leaf must be unique and map to its run/lane in the manifest.
+1. Use one external state root on the allocation host: `${XDG_STATE_HOME:-$HOME/.local/state}/worktrees/`. Repositories and separate clones may share the root directory, never a live worktree or write ownership.
+2. Put new worker, fix, parent review/reconstruction, and candidate worktrees under that root. Allocator-managed subdirectories are allowed, but every checkout path must be unique and map to its source repository, run/lane/role/attempt in the existing manifest.
 3. If a selected backend cannot allocate within the expected tree, pause before launching a worker. Do not silently fall back to another location or allocator.
 4. Use the existing Pi global `worker` and `reviewer` model/thinking settings as cross-backend defaults. Explicit project values override global values; explicit run/lane values override both.
 5. Interactive setup and reconfiguration ask for the worker and reviewer model/thinking choices. Show the current effective value as the default; when unset, offer the user’s stated initial defaults. Dispatch itself is non-interactive.
@@ -21,23 +21,25 @@ Make worktree placement and worker/reviewer model selection consistent when a ru
 
 ## Worktree location and ownership
 
-Resolve the canonical Git top-level directory and derive the shared project root from its parent and repository basename:
+Resolve the canonical source Git top-level directory for repository identity. Resolve the shared state root once on the allocation host:
 
 ```text
-<canonical-repo-parent>/worktrees/<repo-basename>/
+${XDG_STATE_HOME:-$HOME/.local/state}/worktrees/
 ```
 
-This path is outside the active checkout and is not hidden. It needs no `.gitignore` entry. Reject a path that resolves inside the checkout or Pi extension auto-discovery. Resolve and validate symlinks and existing path components before allocating anything.
+Record its absolute canonical path; a non-absolute state directory blocks. Native Pi adds the repository basename and run identity; Paseo adds a checkout hash and workspace slug. Parent-created paths distinguish source checkouts and runs; same-named clones must never reuse a live path. Host configuration is a separately approved operation before dispatch, not an automatic installer or dispatch side effect.
 
-Every worktree created for the run—including worker/fix, parent-owned review/reconstruction, and candidate checkouts—must be registered beneath this project root. A backend may retain its own safe leaf naming scheme; the orchestrator manifest is the authoritative mapping from worktree path to run, lane, role, and attempt. Preserve the existing pinned-base, unique branch/path, handoff, reconstruction, review, and cleanup requirements.
+This path must be outside the active checkout. It needs no `.gitignore` entry. Reject a path that resolves inside the checkout or Pi extension auto-discovery. Resolve and validate symlinks and existing path components before allocating anything.
+
+Every worktree created for the run—including worker/fix, parent-owned review/reconstruction, and candidate checkouts—must be registered beneath this shared state root. Verify the expected common Git directory for each checkout, not containment alone. A backend may retain its own safe leaf naming scheme; the orchestrator manifest is the authoritative mapping from worktree path to run, lane, role, and attempt. Preserve the existing pinned-base, unique branch/path, handoff, reconstruction, review, and cleanup requirements.
 
 Do not move existing worktrees. A continuation on another backend must use the existing durable handoff procedure: resolve the old writer, verify the pinned base and complete patch, then allocate a new worktree under the shared root and replay the patch. Resume an existing workspace in place only when its original backend, path, identity, and exclusive ownership are verified.
 
 ### Backend allocation requirements
 
-- **Pi-subagents:** Keep the selected allocator. Its worktree provider must place the managed worktree under the shared project root. `worktreeBaseDir` can direct the native allocator to a base directory but selects native allocation and conflicts with explicit Worktrunk selection; do not set it in a way that silently changes an explicitly selected provider. If the selected provider cannot honor the root, pause.
-- **Herdr pane:** The parent allocates the registered worktree beneath the shared project root and gives that exact path to a fresh, identity-verified pane session.
-- **Paseo:** The daemon must allocate its managed workspace beneath the shared project root. `worktreeSlug` alone is not proof of the parent directory. Verify a supported root configuration before workspace/agent creation; if the daemon cannot honor the path or access the same repository, pause without launching an agent.
+- **Pi-subagents:** Keep the selected allocator. Its worktree provider must place the managed worktree under the shared state root. `worktreeBaseDir` can direct the native allocator to a base directory but selects native allocation and conflicts with explicit Worktrunk selection; do not set it in a way that silently changes an explicitly selected provider. If the selected provider cannot honor the root, pause.
+- **Herdr pane:** The parent allocates the registered worktree beneath the shared state root and gives that exact path to a fresh, identity-verified pane session.
+- **Paseo:** The daemon must allocate its managed workspace beneath the shared state root. `worktreeSlug` alone is not proof of the parent directory. Verify a supported root configuration before workspace/agent creation; if the daemon cannot honor the path or access the same repository, pause without launching an agent.
 
 Before mutation, the selected adapter must establish that it can honor the target root. Verify the returned worktree path before granting the worker write authority. A path mismatch is a blocked lane, not a reason to continue elsewhere.
 
@@ -63,7 +65,7 @@ Because Pi project override objects replace global role objects rather than deep
 
 ## Failure behavior
 
-- Missing or inaccessible sibling root, unsafe resolved path, path collision, or backend/root mismatch: stop before worker launch and preserve any existing worktree or artifact; do not allocate elsewhere.
+- Missing or inaccessible state root, unsafe resolved path, path collision, or backend/root mismatch: stop before worker launch and preserve any existing worktree or artifact; do not allocate elsewhere.
 - Remote Paseo daemon cannot access the canonical repository/root or cannot be configured to use it: pause before workspace/agent creation.
 - Explicit Pi allocator configuration conflicts with the required root: preserve the selected allocator and pause; do not silently switch to native or Worktrunk.
 - Model unavailable, provider identity mismatched, or requested thinking level unsupported: pause before agent creation; do not substitute a model or downgrade thinking.
@@ -79,8 +81,8 @@ Because Pi project override objects replace global role objects rather than deep
 
 ## Acceptance criteria
 
-- For a checkout at `/path/to/repo`, all newly allocated worker, fix, review/reconstruction, and candidate worktrees are registered beneath `/path/to/worktrees/repo/`; no worktree is created inside `/path/to/repo/`.
-- The common root is stable for repeated runs in that checkout, while distinct clones resolve independently.
+- All newly allocated worker, fix, review/reconstruction, and candidate worktrees are registered beneath the host-resolved `${XDG_STATE_HOME:-$HOME/.local/state}/worktrees/`; no worktree is created inside the source checkout.
+- The common root is stable while host state settings remain unchanged; distinct clones have separate registered checkout paths and verified repository identities. Existing worktrees retain their locations and ownership.
 - Each accepted lane’s manifest maps its run/lane/attempt to the exact backend-returned path; no path is inferred from a worker report alone.
 - A backend that cannot prove it will use the expected root is blocked before it launches a writer; no off-root fallback occurs.
 - Setup asks for worker/reviewer model and thinking on each interactive setup/reconfigure, with current effective values or the stated initial defaults shown; explicit command-line values remain non-interactive.
@@ -110,6 +112,6 @@ These checks establish configuration and routing, not model quality. No broad mo
 ## Capture checkpoint
 
 - **Vocabulary:** No glossary change is required; existing terms `worktree`, `run`, `lane`, `backend`, and `manifest` are sufficient.
-- **Decisions:** No ADR is warranted. The sibling-root policy does not migrate existing state, is reversible for future runs, and its rationale and behavior are captured here; model precedence reuses existing settings.
-- **Behavior:** Revision 1 is the approved behavioral source for the shared-root and model/setup changes. Implementation is not authorized.
+- **Decisions:** No ADR is warranted. The state-root policy does not migrate existing state, is reversible for future runs, and its rationale and behavior are captured here; model precedence reuses existing settings.
+- **Behavior:** Revision 2 is the approved placement amendment. Its source changes and local activation are authorized by the 2026-10-10 chat approval; model/setup requirements are unchanged. No migration or publication authority is granted.
 - **Uncertainty:** Paseo’s ability to target the exact root and each Pi allocator’s ability to preserve its selection while honoring it are conformance gates. Unsupported configurations block dispatch rather than weaken the requirement.

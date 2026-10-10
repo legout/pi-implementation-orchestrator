@@ -1073,6 +1073,8 @@ test_routing_authority_block() {
   assert_not_contains "$block" '`implementer` agent'
   assert_not_contains "$block" '`code-reviewer`'
   assert_contains "$block" 'shared-root and exact model/thinking preflight'
+  assert_contains "$block" '${XDG_STATE_HOME:-$HOME/.local/state}/worktrees/'
+  assert_contains "$block" 'Preserve existing worktrees and allocator configuration'
   assert_contains "$block" 'record the resolved host and roles in existing run state'
   assert_contains "$block" 'intercom is optional messaging, not workspace placement or lifecycle authority'
   assert_contains "$block" 'Do not silently switch hosts or runtimes'

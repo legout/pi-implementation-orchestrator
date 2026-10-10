@@ -28,7 +28,7 @@ planning skills
   → separately authorized target integration and publication
 ```
 
-Setup installs `pi-subagents` and `pi-intercom`; it does not install or configure Herdr, Paseo, or T3. The installed orchestration skill selects the Pi host: explicit/configured choices win, otherwise the verified current host. Native Pi children, fresh Herdr panes, Paseo's Pi provider, and T3's Pi driver are supported transports; T3 children remain read-only without supported isolated mutation binding. Intercom is optional messaging, not placement or lifecycle authority. The shared worktree-root and exact model/thinking policy remains unchanged and is enforced by the skill's selected adapter; setup preserves its existing per-field model-setting behavior.
+Setup installs `pi-subagents` and `pi-intercom`; it does not install or configure Herdr, Paseo, or T3. The installed orchestration skill selects the Pi host: explicit/configured choices win, otherwise the verified current host. Native Pi children, fresh Herdr panes, Paseo's Pi provider, and T3's Pi driver are supported transports; T3 children remain read-only without supported isolated mutation binding. Intercom is optional messaging, not placement or lifecycle authority. New worktrees use the allocation host's `${XDG_STATE_HOME:-$HOME/.local/state}/worktrees/` root, with allocator-supported subdirectories and verified repository identities. Existing worktrees are not moved. Host configuration changes require separate approval before dispatch; setup only documents the placement policy. The exact model/thinking policy remains enforced by the skill's selected adapter; setup preserves its existing per-field model-setting behavior.
 
 ## Repository Layout
 

@@ -224,7 +224,9 @@ For native Pi dispatch, setup uses the `worker`/`reviewer` profiles shipped by `
 
 The skill owns validation obligations, review timing, retained committed-result handoffs, and patch-only recovery. Parent inspection applies to every result; required independent review covers high-risk/contract changes before dependent consumption or the assembled candidate. It does not reopen settled findings. Fresh reviewer prompts carry the complete inline contract, approved criteria, written conventions, and real-use context.
 
-All newly allocated worker/fix, parent review/reconstruction, and candidate worktrees use `<repo-parent>/worktrees/<repo-name>/`. The selected allocator and exact model/thinking pair must be supported or dispatch blocks; setup does not configure host allocators or authorize silent fallback.
+All newly allocated worker/fix, parent review/reconstruction, and candidate worktrees use `${XDG_STATE_HOME:-$HOME/.local/state}/worktrees/` on the allocation host, with allocator-supported subdirectories and verified repository/checkout identities. Existing worktrees remain in place. The selected allocator and exact model/thinking pair must be supported or dispatch blocks; setup does not configure host allocators or authorize silent fallback.
+
+Configure placement separately after inspecting effective host settings and approving the change. Native Pi uses top-level `worktreeBaseDir` in `~/.pi/agent/extensions/subagent/config.json` (or `PI_SUBAGENTS_WORKTREE_DIR` when unset), not a `subagents` field in Pi settings; this selects native allocation and conflicts with explicit Worktrunk. Paseo uses daemon-global `worktrees.root`. Set either to the resolved absolute state root, not a literal shell expression. Inspect the installed host's effective configuration; a daemon or Pi extension may need its own approved reload before effective runtime placement changes. Do not migrate or delete old worktrees to activate the new standard.
 
 ### Review guardrails
 
